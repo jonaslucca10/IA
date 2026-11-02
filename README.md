@@ -22,6 +22,19 @@ npm start                   # abre em http://localhost:3000
 
 Depois abra a página no **Chrome** ou **Edge**, permita o microfone e toque no botão azul.
 
+### Opção grátis: Ollama (modelo local, sem chave)
+
+1. Instale o [Ollama](https://ollama.com) e baixe um modelo: `ollama pull llama3.2`
+2. Rode a aplicação apontando para ele:
+
+```bash
+export LLM_BASE_URL=http://localhost:11434/v1
+export LLM_MODEL=llama3.2
+npm start
+```
+
+Com endereço local, `LLM_API_KEY` não é obrigatória.
+
 ## Estrutura
 
 | Arquivo | Função |

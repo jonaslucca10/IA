@@ -52,6 +52,16 @@ function sanitizeName(input) {
   return (name || 'Assistente').slice(0, MAX_NAME_LENGTH);
 }
 
+/** Endereços locais (ex.: Ollama) não precisam de chave de API. */
+function requiresApiKey(baseUrl) {
+  try {
+    const host = new URL(baseUrl).hostname;
+    return !['localhost', '127.0.0.1', '::1', '[::1]'].includes(host);
+  } catch {
+    return true;
+  }
+}
+
 /** Mantém só mensagens user/assistant válidas e as últimas MAX_HISTORY. */
 function sanitizeMessages(input) {
   if (!Array.isArray(input)) return [];
@@ -143,21 +153,23 @@ function createServer(options = {}) {
     model: options.llm?.model ?? process.env.LLM_MODEL ?? 'gpt-4o-mini',
   };
 
+  const keyRequired = requiresApiKey(llm.baseUrl);
+  const isConfigured = () => !keyRequired || Boolean(llm.apiKey);
+
   async function callLLM(messages) {
-    if (!llm.apiKey) {
+    if (!isConfigured()) {
       throw new HttpError(
         503,
         'Nenhuma chave de IA configurada. Defina LLM_API_KEY (e, se quiser, LLM_BASE_URL e LLM_MODEL) e reinicie o servidor.'
       );
     }
+    const headers = { 'Content-Type': 'application/json' };
+    if (llm.apiKey) headers.Authorization = `Bearer ${llm.apiKey}`;
     let response;
     try {
       response = await fetch(`${llm.baseUrl}/chat/completions`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${llm.apiKey}`,
-        },
+        headers,
         body: JSON.stringify({ model: llm.model, messages, temperature: 0.7 }),
       });
     } catch (err) {
@@ -192,7 +204,7 @@ function createServer(options = {}) {
     const url = new URL(req.url, 'http://localhost');
     try {
       if (req.method === 'GET' && url.pathname === '/api/status') {
-        return sendJson(res, 200, { configured: Boolean(llm.apiKey), model: llm.model });
+        return sendJson(res, 200, { configured: isConfigured(), model: llm.model, baseUrl: llm.baseUrl });
       }
       if (req.method === 'POST' && url.pathname === '/api/chat') {
         return await handleChat(req, res);
@@ -220,8 +232,8 @@ if (require.main === module) {
   const host = process.env.HOST || '0.0.0.0';
   createServer().listen(port, host, () => {
     console.log(`IA por voz rodando em http://localhost:${port}`);
-    if (!process.env.LLM_API_KEY) {
-      console.log('Aviso: LLM_API_KEY não definida — o chat responderá com erro até configurá-la.');
+    if (!process.env.LLM_API_KEY && requiresApiKey(process.env.LLM_BASE_URL || 'https://api.openai.com/v1')) {
+      console.log('Aviso: LLM_API_KEY não definida. Se o provedor for remoto, o chat responderá com erro.');
     }
   });
 }

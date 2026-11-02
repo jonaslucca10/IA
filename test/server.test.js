@@ -66,18 +66,20 @@ test('buildSystemPrompt sem regras usa texto padrão', () => {
 });
 
 test('GET /api/status informa se a chave está configurada', async () => {
-  const server = createServer({ llm: { apiKey: '', baseUrl: 'http://127.0.0.1:1', model: 'm' } });
+  const server = createServer({ llm: { apiKey: '', baseUrl: 'https://api.openai.com/v1', model: 'm' } });
   const port = await listen(server);
   try {
     const res = await fetch(`http://127.0.0.1:${port}/api/status`);
-    assert.deepEqual(await res.json(), { configured: false, model: 'm' });
+    const data = await res.json();
+    assert.equal(data.configured, false);
+    assert.equal(data.model, 'm');
   } finally {
     await close(server);
   }
 });
 
 test('POST /api/chat sem chave retorna 503 com instrução', async () => {
-  const server = createServer({ llm: { apiKey: '', baseUrl: 'http://127.0.0.1:1', model: 'm' } });
+  const server = createServer({ llm: { apiKey: '', baseUrl: 'https://api.openai.com/v1', model: 'm' } });
   const port = await listen(server);
   try {
     const res = await fetch(`http://127.0.0.1:${port}/api/chat`, {
@@ -122,6 +124,30 @@ test('POST /api/chat envia regras como system prompt e devolve a resposta', asyn
     assert.match(call.body.messages[0].content, /Você é Jarvis/);
     assert.match(call.body.messages[0].content, /1\. Responda em português/);
     assert.deepEqual(call.body.messages[1], { role: 'user', content: 'Quem é você?' });
+  } finally {
+    await close(server);
+    await close(provider.server);
+  }
+});
+
+test('endereço local (Ollama) funciona sem chave e sem header Authorization', async () => {
+  const provider = fakeProvider();
+  const providerPort = await listen(provider.server);
+  const server = createServer({
+    llm: { apiKey: '', baseUrl: `http://localhost:${providerPort}/v1`, model: 'llama3.2' },
+  });
+  const port = await listen(server);
+  try {
+    const status = await (await fetch(`http://127.0.0.1:${port}/api/status`)).json();
+    assert.equal(status.configured, true);
+    const res = await fetch(`http://127.0.0.1:${port}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: [{ role: 'user', content: 'oi' }] }),
+    });
+    assert.equal(res.status, 200);
+    assert.equal(provider.calls[0].auth, undefined);
+    assert.equal(provider.calls[0].body.model, 'llama3.2');
   } finally {
     await close(server);
     await close(provider.server);
