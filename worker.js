@@ -11,11 +11,29 @@
  * postMessage — veja o protocolo em app.js (engine).
  */
 
-const LIB_URL = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2';
+const LIB_URLS = [
+  'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2/dist/transformers.web.js',
+  'https://unpkg.com/@huggingface/transformers@4.3.2/dist/transformers.web.js'
+];
 
 let libPromise = null;
 function lib() {
-  if (!libPromise) libPromise = import(LIB_URL);
+  if (!libPromise) {
+    libPromise = (async () => {
+      let lastErr = null;
+      for (const url of LIB_URLS) {
+        try {
+          return await import(url);
+        } catch (err) {
+          lastErr = err;
+        }
+      }
+      throw new Error(
+        'Não foi possível carregar o motor local (CDN do Transformers.js). ' +
+        'Verifique sua conexão e recarregue a página. Detalhe: ' + (lastErr && lastErr.message || lastErr)
+      );
+    })();
+  }
   return libPromise;
 }
 

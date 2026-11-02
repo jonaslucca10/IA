@@ -47,6 +47,9 @@ nas suas costas.
 O app baixa pesos ONNX do Hugging Face e executa via WebGPU (GPU) ou WASM (CPU), com Transformers.js
 v4 dentro de um Web Worker. O modelo fica no cache do navegador.
 
+Na primeira execução, o navegador busca duas coisas na internet: a biblioteca (CDN jsDelivr, com fallback
+para unpkg) e os pesos do modelo (Hugging Face). Depois disso, o app funciona offline.
+
 | Modelo | Tamanho | Indicado para |
 |---|---|---|
 | Qwen2.5 0.5B *(padrão)* | ~400 MB | conversa rápida, respostas curtas |
