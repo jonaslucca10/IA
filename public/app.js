@@ -271,7 +271,11 @@
     .then((r) => r.json())
     .then((s) => {
       if (!s.configured) {
-        showError('Servidor sem chave de IA. Defina LLM_API_KEY e reinicie o servidor.');
+        const msg =
+          'O servidor ainda não tem uma chave de IA, por isso não consigo responder. ' +
+          'Defina a variável LLM_API_KEY no ambiente do servidor, reinicie-o e recarregue esta página.';
+        showError(msg);
+        addMessage('assistant', msg);
       }
     })
     .catch(() => showError('Não foi possível falar com o servidor.'));
