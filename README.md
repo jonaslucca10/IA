@@ -31,9 +31,13 @@ Você ensina conversando, por voz ou digitando:
 
 ```
 aprenda: quando eu disser oi, responda Olá, tudo bem!
+aprenda que quando eu falar tchau você responde até logo
 quando eu disser abacaxi responda Que fruta gostosa!
 esqueça oi
 ```
+
+Formas aceitas: `quando/se` + `eu disser/falar` + gatilho + `responda/responde` + resposta.
+Se a frase parecer um ensino mas não puder ser entendida, o assistente pede o formato certo.
 
 - Ensinar um gatilho que já existe substitui a resposta antiga.
 - O que você ensina é gravado no navegador (em `localStorage`), não no servidor.

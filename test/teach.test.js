@@ -29,10 +29,36 @@ test('reconhece "esqueça X"', () => {
   assert.deepEqual(parseTeachCommand('Esqueça quando eu disser bom dia.'), { type: 'forget', trigger: 'bom dia' });
 });
 
+test('aceita variações naturais de fala', () => {
+  assert.deepEqual(parseTeachCommand('aprenda que quando eu falar oi você responde olá'), {
+    type: 'learn',
+    trigger: 'oi',
+    response: 'olá',
+  });
+  assert.deepEqual(parseTeachCommand('aprenda isso: quando eu disser oi responda olá'), {
+    type: 'learn',
+    trigger: 'oi',
+    response: 'olá',
+  });
+  assert.deepEqual(parseTeachCommand('se eu disser tudo bem você responde tudo joia'), {
+    type: 'learn',
+    trigger: 'tudo bem',
+    response: 'tudo joia',
+  });
+});
+
+test('reconhece variações de esquecer sem pegar o "que" como gatilho', () => {
+  assert.deepEqual(parseTeachCommand('esquece oi'), { type: 'forget', trigger: 'oi' });
+  assert.deepEqual(parseTeachCommand('esqueça que quando eu disser oi'), { type: 'forget', trigger: 'oi' });
+});
+
 test('frases comuns não são tratadas como comando', () => {
-  assert.equal(parseTeachCommand('quando eu disser que estou cansado, eu acho'), null);
+  assert.equal(parseTeachCommand('se eu falar sobre futebol gosto muito'), null);
   assert.equal(parseTeachCommand('qual é a capital da França?'), null);
-  assert.equal(parseTeachCommand('aprenda: quando eu disser oi'), null);
+});
+
+test('tentativa de ensinar incompleta é sinalizada como inválida', () => {
+  assert.deepEqual(parseTeachCommand('aprenda: quando eu disser oi'), { type: 'invalid' });
 });
 
 test('applyLearn adiciona a regra e substitui a antiga com o mesmo gatilho', () => {
@@ -73,6 +99,16 @@ test('ciclo completo: ensina, usa a regra nova e esquece', () => {
   );
   assert.equal(forgot.reply, 'Pronto, esqueci "abacaxi".');
   assert.doesNotMatch(forgot.rules, /abacaxi/);
+});
+
+test('tentativa de ensinar mal formada responde com ajuda e não muda as regras', () => {
+  const out = runChat(
+    { rules: 'oi => Olá', messages: [{ role: 'user', content: 'aprenda: quando eu disser oi' }] },
+    { model: EMPTY_MODEL }
+  );
+  assert.equal(out.source, 'teach');
+  assert.equal(out.rules, undefined);
+  assert.match(out.reply, /Não entendi/);
 });
 
 test('esquecer algo que não existe avisa', () => {
