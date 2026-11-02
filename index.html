@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#0a0a0f" />
+<title>MinhaIA — você cria as regras</title>
+<meta name="description" content="Estúdio para criar seu próprio agente de IA: identidade, regras, estilo e modelo, tudo definido por você." />
+<link rel="stylesheet" href="styles.css" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>" />
+</head>
+<body>
+
+<!-- ============ TOPBAR ============ -->
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-mark">M</div>
+    <div class="brand-text">
+      <strong>MinhaIA</strong>
+      <span>você cria as regras</span>
+    </div>
+  </div>
+
+  <div class="topbar-center">
+    <span class="agent-badge" id="topAgentName">Meu agente</span>
+    <span class="save-state" id="saveState">salvo localmente</span>
+  </div>
+
+  <div class="topbar-actions">
+    <button class="btn ghost hide-sm" id="btnTemplates" title="Começar de um modelo pronto">Modelos</button>
+    <button class="btn ghost" id="btnPrompt" title="Ver o prompt que será enviado">Prompt final</button>
+    <div class="menu-wrap">
+      <button class="btn ghost icon" id="btnMenu" title="Mais opções" aria-haspopup="true" aria-expanded="false">⋯</button>
+      <div class="menu" id="menu" hidden>
+        <button data-action="new">＋ Novo agente</button>
+        <button data-action="duplicate">⧉ Duplicar agente</button>
+        <button data-action="templates">◈ Modelos prontos</button>
+        <button data-action="export">↧ Exportar (.json)</button>
+        <button data-action="import">↥ Importar (.json)</button>
+        <div class="menu-sep"></div>
+        <button data-action="clearchat">✕ Limpar conversa</button>
+        <button data-action="reset" class="danger">↺ Apagar tudo e recomeçar</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="layout">
+
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-head">
+      <h2>Meus agentes</h2>
+      <button class="btn small primary" id="btnNewAgent">＋ Criar</button>
+    </div>
+    <div class="agent-list" id="agentList"></div>
+    <div class="sidebar-foot">
+      <p><strong>Seus dados ficam aqui.</strong> Regras e conversas são salvas no seu navegador. Nada é enviado para nós.</p>
+    </div>
+  </aside>
+
+  <!-- ============ BUILDER ============ -->
+  <section class="builder" id="builder">
+    <div class="builder-head">
+      <div class="agent-title-edit">
+        <input id="agentEmoji" class="emoji-input" maxlength="4" value="🧠" title="Emoji do agente" aria-label="Emoji do agente" />
+        <input id="agentName" class="name-input" value="Meu agente" title="Nome do agente" aria-label="Nome do agente" />
+      </div>
+      <p class="hint">Tudo aqui é definido por você. Edite, salve, conecte um modelo e converse.</p>
+    </div>
+
+    <div class="scroll-area">
+
+      <!-- IDENTIDADE -->
+      <section class="card" data-open="true">
+        <header class="card-head" data-toggle>
+          <span class="card-ico">01</span>
+          <div>
+            <h3>Identidade</h3>
+            <p>Quem é essa IA e qual o papel dela</p>
+          </div>
+          <span class="chev">▾</span>
+        </header>
+        <div class="card-body">
+          <label class="field">
+            <span class="label">Quem ela é</span>
+            <textarea id="identity" rows="5" placeholder="Ex.: Você é a Bia, uma estrategista de conteúdo que fala como uma amiga experiente. Responde de forma direta, sem enrolação, e sempre dá um exemplo prático."></textarea>
+            <span class="hint">Descreva a persona, o papel e o contexto. Isso vira a base do system prompt.</span>
+          </label>
+        </div>
+      </section>
+
+      <!-- REGRAS -->
+      <section class="card" data-open="true">
+        <header class="card-head" data-toggle>
+          <span class="card-ico">02</span>
+          <div>
+            <h3>Regras</h3>
+            <p>O que ela deve sempre fazer e o que nunca deve fazer</p>
+          </div>
+          <span class="chev">▾</span>
+        </header>
+        <div class="card-body">
+          <div class="rule-tabs" role="tablist">
+            <button class="rule-tab active" data-tab="always" role="tab">✓ Sempre</button>
+            <button class="rule-tab" data-tab="never" role="tab">✕ Nunca</button>
+          </div>
+
+          <div class="rule-panel" data-panel="always">
+            <div class="rule-list" id="listAlways"></div>
+            <div class="rule-add">
+              <input type="text" id="inputAlways" placeholder="Ex.: responder em português e ir direto ao ponto" />
+              <button class="btn small primary" data-add="always">Adicionar</button>
+            </div>
+          </div>
+
+          <div class="rule-panel" data-panel="never" hidden>
+            <div class="rule-list" id="listNever"></div>
+            <div class="rule-add">
+              <input type="text" id="inputNever" placeholder="Ex.: usar jargão difícil sem explicar" />
+              <button class="btn small primary" data-add="never">Adicionar</button>
+            </div>
+          </div>
+
+          <p class="hint">Regras curtas e específicas funcionam melhor que parágrafos longos. Arraste para reordenar.</p>
+        </div>
+      </section>
+
+      <!-- ESTILO -->
+      <section class="card" data-open="false">
+        <header class="card-head" data-toggle>
+          <span class="card-ico">03</span>
+          <div>
+            <h3>Estilo e formato</h3>
+            <p>Tom, idioma, tamanho e formato das respostas</p>
+          </div>
+          <span class="chev">▾</span>
+        </header>
+        <div class="card-body">
+          <div class="grid-2">
+            <label class="field">
+              <span class="label">Tom</span>
+              <select id="tone">
+                <option value="direto e objetivo">Direto e objetivo</option>
+                <option value="amigável e próximo">Amigável e próximo</option>
+                <option value="profissional e formal">Profissional e formal</option>
+                <option value="didático e paciente">Didático e paciente</option>
+                <option value="criativo e ousado">Criativo e ousado</option>
+                <option value="técnico e preciso">Técnico e preciso</option>
+                <option value="sarcástico e bem-humorado">Sarcástico e bem-humorado</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="label">Idioma</span>
+              <select id="language">
+                <option value="português do Brasil">Português (BR)</option>
+                <option value="português de Portugal">Português (PT)</option>
+                <option value="inglês">Inglês</option>
+                <option value="espanhol">Espanhol</option>
+                <option value="o idioma da mensagem do usuário">Automático</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="label">Tamanho das respostas</span>
+              <select id="length">
+                <option value="curtas (até 3 parágrafos)">Curtas</option>
+                <option value="equilibradas">Equilibradas</option>
+                <option value="detalhadas e completas">Detalhadas</option>
+                <option value="o mínimo necessário para resolver o pedido">Mínimo necessário</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="label">Formato</span>
+              <select id="format">
+                <option value="texto corrido com markdown quando ajudar">Livre (markdown)</option>
+                <option value="listas e tópicos curtos">Listas e tópicos</option>
+                <option value="passo a passo numerado">Passo a passo</option>
+                <option value="tabelas quando fizer sentido">Tabelas</option>
+                <option value="apenas texto simples, sem markdown">Texto simples</option>
+              </select>
+            </label>
+          </div>
+          <label class="field" style="margin-top:14px">
+            <span class="label">Instruções extras de comportamento <span class="opt">opcional</span></span>
+            <textarea id="extra" rows="3" placeholder="Ex.: sempre termine com uma pergunta de acompanhamento. Se não souber algo, diga que não sabe em vez de inventar."></textarea>
+          </label>
+        </div>
+      </section>
+
+      <!-- EXEMPLOS -->
+      <section class="card" data-open="false">
+        <header class="card-head" data-toggle>
+          <span class="card-ico">04</span>
+          <div>
+            <h3>Exemplos de resposta</h3>
+            <p>Mostre na prática como ela deve responder</p>
+          </div>
+          <span class="chev">▾</span>
+        </header>
+        <div class="card-body">
+          <div id="exampleList" class="example-list"></div>
+          <button class="btn small ghost" id="btnAddExample">＋ Adicionar exemplo</button>
+          <p class="hint">Exemplos valem mais que regras: a IA imita o padrão que você mostrar.</p>
+        </div>
+      </section>
+
+      <!-- MODELO -->
+      <section class="card" data-open="false">
+        <header class="card-head" data-toggle>
+          <span class="card-ico">05</span>
+          <div>
+            <h3>Modelo</h3>
+            <p>Qual cérebro vai rodar as suas regras</p>
+          </div>
+          <span class="chev">▾</span>
+        </header>
+        <div class="card-body">
+          <label class="field">
+            <span class="label">Provedor</span>
+            <select id="provider"></select>
+            <span class="hint" id="providerHint"></span>
+          </label>
+
+          <div class="grid-2" style="margin-top:14px">
+            <label class="field">
+              <span class="label">Endpoint (base URL)</span>
+              <input type="text" id="baseUrl" spellcheck="false" placeholder="https://api.openai.com/v1" />
+            </label>
+            <label class="field">
+              <span class="label">Modelo</span>
+              <input type="text" id="model" list="modelSuggestions" spellcheck="false" placeholder="gpt-4o-mini" />
+              <datalist id="modelSuggestions"></datalist>
+            </label>
+          </div>
+
+          <label class="field" style="margin-top:14px" id="keyField">
+            <span class="label">API key <span class="opt">fica só no seu navegador</span></span>
+            <div class="key-row">
+              <input type="password" id="apiKey" spellcheck="false" autocomplete="off" placeholder="sk-..." />
+              <button class="btn small ghost" id="btnToggleKey" type="button" title="Mostrar/ocultar">👁</button>
+            </div>
+            <span class="hint">Salva só neste navegador. Evite usar em computador compartilhado.</span>
+          </label>
+
+          <div class="grid-2" style="margin-top:14px">
+            <label class="field">
+              <span class="label">Criatividade <b id="tempVal">0.7</b></span>
+              <input type="range" id="temperature" min="0" max="2" step="0.1" value="0.7" />
+              <span class="hint" id="tempDesc">equilibrado</span>
+            </label>
+            <label class="field">
+              <span class="label">Máx. de tokens</span>
+              <input type="number" id="maxTokens" min="64" max="32768" step="64" value="2048" />
+              <span class="hint">Tamanho máximo da resposta.</span>
+            </label>
+          </div>
+
+          <label class="check-row" style="margin-top:6px">
+            <input type="checkbox" id="stream" checked />
+            <span>Resposta em tempo real (streaming)</span>
+          </label>
+
+          <div class="model-actions">
+            <button class="btn small ghost" id="btnTest">Testar conexão</button>
+            <span class="hint" id="testResult"></span>
+          </div>
+
+          <div class="callout" id="localCallout">
+            <strong>Controle máximo:</strong> rodando um modelo local (Ollama ou LM Studio), tudo acontece na sua máquina — as regras, o histórico e as respostas não passam por servidor de terceiros.
+            <br /><br />
+            Esta interface não adiciona filtros nem censura própria: o prompt que sai daqui é exatamente o que você montou. O comportamento final depende do modelo conectado.
+          </div>
+        </div>
+      </section>
+
+      <footer class="builder-foot">
+        <button class="btn ghost" id="btnDeleteAgent">Excluir este agente</button>
+        <button class="btn primary" id="btnGoChat">Ir para o chat →</button>
+      </footer>
+    </div>
+  </section>
+
+  <!-- ============ CHAT ============ -->
+  <section class="chat" id="chatPanel">
+    <header class="chat-head">
+      <div class="chat-title">
+        <span id="chatEmoji">🧠</span>
+        <div>
+          <strong id="chatName">Meu agente</strong>
+          <small id="chatModel">modelo não configurado</small>
+        </div>
+      </div>
+      <div class="chat-actions">
+        <button class="btn ghost small" id="btnClearChat" title="Limpar conversa">Limpar</button>
+        <button class="btn ghost small icon" id="btnSettingsMobile" title="Editar regras">⚙</button>
+      </div>
+    </header>
+
+    <div class="messages" id="messages">
+      <div class="empty-state" id="emptyState">
+        <div class="empty-emoji" id="emptyEmoji">🧠</div>
+        <h3 id="emptyTitle">Seu agente está pronto</h3>
+        <p id="emptyText">Escreva as regras ao lado, conecte um modelo na seção <strong>Modelo</strong> e mande a primeira mensagem.</p>
+        <div class="suggestions" id="suggestions"></div>
+      </div>
+    </div>
+
+    <form class="composer" id="composer">
+      <div class="composer-box">
+        <textarea id="input" rows="1" placeholder="Escreva para o seu agente…" aria-label="Mensagem"></textarea>
+        <button type="submit" class="btn primary send" id="btnSend" title="Enviar (Enter)">
+          <span class="send-label">Enviar</span>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22 11 13 2 9z"/></svg>
+        </button>
+        <button type="button" class="btn danger send hidden" id="btnStop">Parar</button>
+      </div>
+      <div class="composer-foot">
+        <span><kbd>Enter</kbd> envia · <kbd>Shift</kbd>+<kbd>Enter</kbd> quebra linha</span>
+        <span id="usageLabel"></span>
+      </div>
+    </form>
+  </section>
+</main>
+
+<!-- ============ MOBILE TABS ============ -->
+<nav class="mobile-tabs">
+  <button data-view="chat" class="active">Chat</button>
+  <button data-view="builder">Regras</button>
+  <button data-view="sidebar">Agentes</button>
+</nav>
+
+<!-- ============ PROMPT MODAL ============ -->
+<div class="modal" id="promptModal" hidden>
+  <div class="modal-card">
+    <header class="modal-head">
+      <h2>Prompt final</h2>
+      <button class="btn ghost icon" data-close>✕</button>
+    </header>
+    <p class="hint" style="margin:0 0 12px">É exatamente isto que o modelo recebe como instrução de sistema, junto com a conversa.</p>
+    <pre class="prompt-box" id="promptBox"></pre>
+    <footer class="modal-foot">
+      <button class="btn ghost" id="btnCopyPrompt">Copiar prompt</button>
+      <button class="btn primary" data-close>Fechar</button>
+    </footer>
+  </div>
+</div>
+
+<!-- ============ TEMPLATES MODAL ============ -->
+<div class="modal" id="templatesModal" hidden>
+  <div class="modal-card wide">
+    <header class="modal-head">
+      <h2>Começar de um modelo</h2>
+      <button class="btn ghost icon" data-close>✕</button>
+    </header>
+    <p class="hint" style="margin:0 0 16px">Escolha um ponto de partida. Tudo pode ser editado depois — são só registros iniciais.</p>
+    <div class="template-grid" id="templateGrid"></div>
+  </div>
+</div>
+
+<!-- ============ CONFIRM MODAL ============ -->
+<div class="modal" id="confirmModal" hidden>
+  <div class="modal-card small">
+    <header class="modal-head">
+      <h2 id="confirmTitle">Tem certeza?</h2>
+      <button class="btn ghost icon" data-close>✕</button>
+    </header>
+    <p id="confirmText" style="margin:0 0 20px;color:var(--text-2)"></p>
+    <footer class="modal-foot">
+      <button class="btn ghost" data-close>Cancelar</button>
+      <button class="btn danger" id="confirmOk">Confirmar</button>
+    </footer>
+  </div>
+</div>
+
+<input type="file" id="importFile" accept="application/json,.json" hidden />
+<div class="toast-wrap" id="toastWrap"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
