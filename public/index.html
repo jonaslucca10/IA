@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>IA por voz</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="dot" id="statusDot"></span>
+      <h1 id="assistantTitle">Assistente</h1>
+    </div>
+    <div class="actions">
+      <button id="newChatBtn" type="button" class="ghost">Nova conversa</button>
+      <button id="settingsBtn" type="button" class="ghost" aria-expanded="false">Configurar</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="chat-panel">
+      <div id="log" class="log" aria-live="polite"></div>
+
+      <div class="voice-bar">
+        <button id="micBtn" type="button" class="mic" aria-pressed="false" title="Falar">
+          <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
+            <path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/>
+          </svg>
+        </button>
+        <span id="micHint" class="hint">Toque no microfone e fale</span>
+      </div>
+
+      <form id="textForm" class="text-form" autocomplete="off">
+        <input id="textInput" type="text" placeholder="Ou digite aqui…" maxlength="4000" />
+        <button type="submit">Enviar</button>
+      </form>
+
+      <p id="errorBox" class="error" role="alert" hidden></p>
+    </section>
+
+    <aside id="settings" class="settings" hidden>
+      <h2>Regras da IA</h2>
+
+      <label>
+        Nome do assistente
+        <input id="nameInput" type="text" maxlength="40" />
+      </label>
+
+      <label>
+        Regras (uma por linha)
+        <textarea id="rulesInput" rows="12" placeholder="Ex.: Responda sempre em português.&#10;Seja direto e objetivo."></textarea>
+      </label>
+
+      <h2>Voz</h2>
+
+      <label class="inline">
+        <input id="speakToggle" type="checkbox" />
+        Responder em voz alta
+      </label>
+
+      <label>
+        Idioma da voz
+        <select id="langSelect">
+          <option value="pt-BR">Português (Brasil)</option>
+          <option value="en-US">English (US)</option>
+          <option value="es-ES">Español</option>
+        </select>
+      </label>
+
+      <label>
+        Velocidade da fala: <span id="rateValue">1.0</span>
+        <input id="rateInput" type="range" min="0.5" max="2" step="0.1" value="1" />
+      </label>
+
+      <div class="row">
+        <button id="saveBtn" type="button">Salvar</button>
+        <button id="resetRulesBtn" type="button" class="ghost">Restaurar padrão</button>
+      </div>
+      <p id="saveMsg" class="hint" aria-live="polite"></p>
+    </aside>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
