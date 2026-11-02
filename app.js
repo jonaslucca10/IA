@@ -22,6 +22,10 @@ const uid = () => Math.random().toString(36).slice(2, 9) + Date.now().toString(3
 
 /* ---------------- provedores ---------------- */
 const PROVIDERS = {
+  browser: {
+    label: 'No navegador (sem API)', baseUrl: '', models: [], key: false, kind: 'browser',
+    hint: 'Baixa o modelo uma vez e roda no seu dispositivo. Sem chave, sem cadastro, sem servidor.'
+  },
   openai: {
     label: 'OpenAI', baseUrl: 'https://api.openai.com/v1',
     models: ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1', 'gpt-4.1-mini', 'o4-mini'],
@@ -61,13 +65,13 @@ const PROVIDERS = {
   ollama: {
     label: 'Ollama (local, grátis)', baseUrl: 'http://localhost:11434/v1',
     models: ['llama3.2', 'qwen2.5', 'mistral', 'gemma3', 'deepseek-r1'],
-    key: false,
+    key: false, kind: 'local',
     hint: 'Roda na sua máquina: nada sai do seu computador. Precisa do Ollama aberto e de CORS liberado (OLLAMA_ORIGINS=*).'
   },
   lmstudio: {
     label: 'LM Studio (local)', baseUrl: 'http://localhost:1234/v1',
     models: ['local-model'],
-    key: false,
+    key: false, kind: 'local',
     hint: 'Carregue um modelo no LM Studio e inicie o servidor local. Tudo fica na sua máquina.'
   },
   custom: {
@@ -77,6 +81,23 @@ const PROVIDERS = {
     hint: 'Qualquer API no formato /chat/completions (vLLM, Together, Fireworks, seu próprio servidor…).'
   }
 };
+
+/* ---------------- modelos que rodam no navegador ---------------- */
+const BROWSER_MODELS = [
+  { id: 'onnx-community/Qwen2.5-0.5B-Instruct', label: 'Qwen2.5 0.5B · leve (~400 MB)' },
+  { id: 'onnx-community/Llama-3.2-1B-Instruct-ONNX', label: 'Llama 3.2 1B · equilibrado (~700 MB)' },
+  { id: 'onnx-community/Qwen3-0.6B-ONNX', label: 'Qwen3 0.6B · raciocínio (~500 MB)' },
+  { id: 'onnx-community/Qwen3-1.7B-ONNX', label: 'Qwen3 1.7B · mais qualidade (~1,2 GB)' },
+  { id: 'custom', label: 'Outro modelo ONNX…' }
+];
+
+const BROWSER_DEFAULT_MODEL = BROWSER_MODELS[0].id;
+
+function browserModelLabel(id) {
+  const found = BROWSER_MODELS.find(m => m.id === id);
+  if (found) return found.label.split(' · ')[0];
+  return String(id || 'modelo local').split('/').pop().replace(/-ONNX$/, '');
+}
 
 /* ---------------- modelos prontos ---------------- */
 const TEMPLATES = [
@@ -207,6 +228,264 @@ function md(src) {
   return out.join('');
 }
 
+/* ---------------- motor no navegador (sem API) ---------------- */
+const BROWSER = {
+  worker: null,
+  loadedKey: null,
+  loading: null,
+  pending: new Map(),
+  seq: 0,
+  onProgress: null,
+  supported: typeof Worker !== 'undefined'
+};
+
+function browserWorker() {
+  if (BROWSER.worker) return BROWSER.worker;
+  const w = new Worker('worker.js', { type: 'module' });
+  w.onmessage = e => onEngineMessage(e.data);
+  w.onerror = e => {
+    const err = new Error('Falha no motor local: ' + (e.message || 'erro desconhecido'));
+    failAll(err);
+  };
+  BROWSER.worker = w;
+  return w;
+}
+
+function failAll(err) {
+  if (BROWSER.loading) {
+    const { reject } = BROWSER.loading;
+    BROWSER.loading = null;
+    reject(err);
+  }
+  BROWSER.pending.forEach(p => p.reject(err));
+  BROWSER.pending.clear();
+  BROWSER.loadedKey = null;
+}
+
+function killEngine() {
+  if (BROWSER.worker) {
+    BROWSER.worker.terminate();
+    BROWSER.worker = null;
+  }
+  failAll(Object.assign(new Error('Carregamento interrompido.'), { name: 'AbortError' }));
+}
+
+function onEngineMessage(msg) {
+  if (!msg) return;
+
+  if (msg.type === 'progress') {
+    if (BROWSER.onProgress) BROWSER.onProgress(msg);
+    return;
+  }
+  if (msg.type === 'loaded') {
+    const loading = BROWSER.loading;
+    BROWSER.loadedKey = loading ? loading.key : msg.modelId + '|auto';
+    BROWSER.loading = null;
+    if (loading) loading.resolve(msg);
+    return;
+  }
+  if (msg.type === 'delta') {
+    const p = BROWSER.pending.get(msg.reqId);
+    if (p && p.onDelta) p.onDelta(msg.text);
+    return;
+  }
+  if (msg.type === 'done') {
+    const p = BROWSER.pending.get(msg.reqId);
+    if (p) { BROWSER.pending.delete(msg.reqId); p.resolve(msg); }
+    return;
+  }
+  if (msg.type === 'error') {
+    const err = new Error(msg.message || 'Erro do modelo local');
+    const p = msg.reqId != null ? BROWSER.pending.get(msg.reqId) : null;
+    if (p) { BROWSER.pending.delete(msg.reqId); p.reject(err); }
+    else failAll(err);
+  }
+}
+
+function ensureBrowserModel(modelId, device, onProgress) {
+  const key = modelId + '|' + device;
+  if (BROWSER.loadedKey === key) return Promise.resolve({ modelId, device, cached: true });
+  if (BROWSER.loading && BROWSER.loading.key === key) {
+    BROWSER.onProgress = onProgress || BROWSER.onProgress;
+    return BROWSER.loading.promise;
+  }
+
+  const worker = browserWorker();
+  BROWSER.onProgress = onProgress || null;
+
+  // se outro modelo estava carregando, descarta aquele carregamento
+  if (BROWSER.loading && BROWSER.loading.key !== key) {
+    const stale = BROWSER.loading;
+    BROWSER.loading = null;
+    stale.reject(Object.assign(new Error('Carregamento substituído por outro modelo.'), { name: 'AbortError' }));
+  }
+
+  const promise = new Promise((resolve, reject) => {
+    BROWSER.loading = { key, device, resolve, reject, promise: null };
+    worker.postMessage({ type: 'load', modelId, device });
+  });
+  if (BROWSER.loading) BROWSER.loading.promise = promise;
+  return promise;
+}
+
+function browserGenerate({ messages, options, onDelta, signal }) {
+  const worker = browserWorker();
+  const reqId = ++BROWSER.seq;
+
+  return new Promise((resolve, reject) => {
+    BROWSER.pending.set(reqId, { onDelta, resolve, reject });
+
+    if (signal) {
+      const abort = () => {
+        worker.postMessage({ type: 'interrupt', reqId });
+        // se o motor não responder, devolve o que já foi gerado
+        setTimeout(() => {
+          const p = BROWSER.pending.get(reqId);
+          if (p) { BROWSER.pending.delete(reqId); p.resolve({ text: '', interrupted: true }); }
+        }, 2500);
+      };
+      if (signal.aborted) abort();
+      else signal.addEventListener('abort', abort, { once: true });
+    }
+
+    worker.postMessage({ type: 'generate', reqId, messages, options });
+  });
+}
+
+/* filtro que esconde blocos de raciocínio de modelos como o Qwen3 */
+function partialSuffix(str, pattern) {
+  const lower = str.toLowerCase();
+  const p = pattern.toLowerCase();
+  for (let n = Math.min(p.length - 1, lower.length); n > 0; n--) {
+    if (lower.endsWith(p.slice(0, n))) return n;
+  }
+  return 0;
+}
+
+function createThinkFilter(emit) {
+  let buf = '';
+  let mode = 'text';
+
+  return {
+    push(chunk) {
+      buf += chunk;
+      let out = '';
+      for (;;) {
+        if (mode === 'text') {
+          const i = buf.toLowerCase().indexOf('<think');
+          if (i === -1) {
+            const keep = partialSuffix(buf, '<think');
+            out += buf.slice(0, buf.length - keep);
+            buf = buf.slice(buf.length - keep);
+            break;
+          }
+          out += buf.slice(0, i);
+          buf = buf.slice(i + 6);
+          const j = buf.indexOf('>');
+          if (j === -1) { mode = 'openTag'; break; }
+          buf = buf.slice(j + 1);
+          mode = 'think';
+        } else if (mode === 'openTag') {
+          const j = buf.indexOf('>');
+          if (j === -1) break;
+          buf = buf.slice(j + 1);
+          mode = 'think';
+        } else if (mode === 'think') {
+          const i = buf.toLowerCase().indexOf('</think');
+          if (i === -1) { buf = buf.slice(buf.length - partialSuffix(buf, '</think')); break; }
+          buf = buf.slice(i + 8);
+          const j = buf.indexOf('>');
+          if (j === -1) { mode = 'closeTag'; break; }
+          buf = buf.slice(j + 1);
+          mode = 'text';
+        } else {
+          const j = buf.indexOf('>');
+          if (j === -1) break;
+          buf = buf.slice(j + 1);
+          mode = 'text';
+        }
+      }
+      if (out) emit(out);
+    },
+    finish() {
+      if (mode === 'text' && buf) emit(buf);
+      buf = '';
+      mode = 'text';
+    }
+  };
+}
+
+function stripThinking(text) {
+  return String(text || '')
+    .replace(/<think[\s>][\s\S]*?<\/think>/gi, '')
+    .replace(/<think[\s>][\s\S]*$/i, '')
+    .replace(/<\/think>/gi, '')
+    .trim();
+}
+
+/* mantém o contexto dentro do que um modelo pequeno aguenta */
+function trimForLocal(messages, maxChars = 9000) {
+  if (!messages.length) return messages;
+  const system = messages[0];
+  const rest = messages.slice(1);
+  let total = String(system.content || '').length;
+  const kept = [];
+  for (let i = rest.length - 1; i >= 0; i--) {
+    const size = String(rest[i].content || '').length;
+    if (total + size > maxChars) break;
+    kept.unshift(rest[i]);
+    total += size;
+  }
+  if (!kept.length && rest.length) kept.push(rest[rest.length - 1]);
+  return [system, ...kept];
+}
+
+async function callBrowserModel(agent, messages, onDelta, signal, onStatus) {
+  if (!BROWSER.supported) throw new Error('Este navegador não suporta Web Workers — use Chrome, Edge, Firefox ou Safari atualizado.');
+
+  const modelId = (agent.model.model || '').trim();
+  const device = agent.model.device || 'auto';
+
+  if (!modelId) throw new Error('Escolha um modelo local na seção Modelo.');
+
+  const abortDuringLoad = () => { if (BROWSER.loading) killEngine(); };
+  if (signal) {
+    if (signal.aborted) abortDuringLoad();
+    else signal.addEventListener('abort', abortDuringLoad, { once: true });
+  }
+
+  try {
+    if (BROWSER.loadedKey !== modelId + '|' + device) {
+      onStatus && onStatus({ phase: 'loading', label: 'carregando modelo no navegador…' });
+      await ensureBrowserModel(modelId, device, info => onStatus && onStatus(info));
+    }
+  } finally {
+    if (signal) signal.removeEventListener('abort', abortDuringLoad);
+  }
+
+  onStatus && onStatus({ phase: 'ready', label: 'pensando…' });
+
+  const filter = createThinkFilter(piece => onDelta(piece));
+  let raw = '';
+
+  const result = await browserGenerate({
+    messages: trimForLocal(messages),
+    options: {
+      maxNewTokens: agent.model.maxTokens,
+      temperature: agent.model.temperature,
+      topP: 0.95,
+      repetitionPenalty: 1.1
+    },
+    onDelta: piece => { raw += piece; filter.push(piece); },
+    signal
+  });
+
+  filter.finish();
+
+  const text = stripThinking(result?.text || raw);
+  return text;
+}
+
 /* ---------------- estado ---------------- */
 let state = { agents: [], currentId: null, keys: {} };
 let saveTimer = null;
@@ -232,11 +511,12 @@ function makeAgent(t = null) {
     extra: base.extra || '',
     examples: (base.examples || []).map(e => ({ id: uid(), user: e.user, assistant: e.assistant })),
     model: {
-      provider: 'openai',
-      baseUrl: PROVIDERS.openai.baseUrl,
-      model: 'gpt-4o-mini',
+      provider: 'browser',
+      baseUrl: '',
+      model: BROWSER_DEFAULT_MODEL,
+      device: 'auto',
       temperature: 0.7,
-      maxTokens: 2048,
+      maxTokens: 512,
       stream: true
     },
     suggestions: base.suggestions || ['Se apresente em 2 frases', 'O que você consegue fazer?', 'Vamos começar'],
@@ -258,6 +538,7 @@ function load() {
       if (Array.isArray(data.agents) && data.agents.length) {
         state = { agents: data.agents.map(migrate), currentId: data.currentId, keys: data.keys || {} };
         if (!state.agents.some(a => a.id === state.currentId)) state.currentId = state.agents[0].id;
+        adoptBrowserIfUnusable();
         return;
       }
     }
@@ -267,13 +548,36 @@ function load() {
   persist(true);
 }
 
+// agentes sem chave e sem conversa passam a usar o modelo no navegador
+function adoptBrowserIfUnusable() {
+  state.agents.forEach(a => {
+    const p = PROVIDERS[a.model.provider];
+    if (!p || p.kind === 'browser') return;
+    if (p.key && !(state.keys[a.model.provider] || '').trim() && !a.messages.length) {
+      a.model.provider = 'browser';
+      a.model.baseUrl = '';
+      a.model.model = BROWSER_DEFAULT_MODEL;
+      a.model.device = a.model.device || 'auto';
+      a.model.maxTokens = Math.min(a.model.maxTokens || 512, 512);
+    }
+  });
+}
+
 function migrate(a) {
   a.rules = a.rules || { always: [], never: [] };
   a.rules.always = (a.rules.always || []).map(r => (typeof r === 'string' ? { id: uid(), text: r } : r));
   a.rules.never = (a.rules.never || []).map(r => (typeof r === 'string' ? { id: uid(), text: r } : r));
   a.style = Object.assign({ tone: 'direto e objetivo', language: 'português do Brasil', length: 'equilibradas', format: 'texto corrido com markdown quando ajudar' }, a.style || {});
   a.examples = a.examples || [];
-  a.model = Object.assign({ provider: 'openai', baseUrl: PROVIDERS.openai.baseUrl, model: 'gpt-4o-mini', temperature: 0.7, maxTokens: 2048, stream: true }, a.model || {});
+  a.model = Object.assign({
+    provider: 'browser',
+    baseUrl: '',
+    model: BROWSER_DEFAULT_MODEL,
+    device: 'auto',
+    temperature: 0.7,
+    maxTokens: 512,
+    stream: true
+  }, a.model || {});
   if (!PROVIDERS[a.model.provider]) a.model.provider = 'custom';
   a.messages = a.messages || [];
   a.suggestions = a.suggestions || [];
@@ -345,6 +649,7 @@ function providerOf(agent) {
 
 function isConfigured(agent) {
   const p = providerOf(agent);
+  if (p.kind === 'browser') return !!String(agent.model.model || '').trim();
   const hasKey = !p.key || !!(state.keys[agent.model.provider] || '').trim();
   return !!(agent.model.baseUrl || '').trim() && !!(agent.model.model || '').trim() && hasKey;
 }
@@ -356,11 +661,15 @@ function renderAgentList() {
   state.agents.forEach(a => {
     const el = document.createElement('div');
     el.className = 'agent-item' + (a.id === state.currentId ? ' active' : '');
+    const kind = (PROVIDERS[a.model.provider] || {}).kind;
+    const sub = kind === 'browser'
+      ? 'navegador · ' + browserModelLabel(a.model.model)
+      : (a.model.model || 'modelo não definido');
     el.innerHTML = `
       <div class="a-emoji">${esc(a.emoji || '🧠')}</div>
       <div class="a-meta">
         <div class="a-name">${esc(a.name || 'Sem nome')}</div>
-        <div class="a-sub">${esc(a.model.model || 'modelo não definido')}</div>
+        <div class="a-sub">${esc(sub)}</div>
       </div>`;
     el.addEventListener('click', () => selectAgent(a.id));
     box.appendChild(el);
@@ -390,8 +699,34 @@ function renderBuilder() {
   $('#extra').value = a.extra;
 
   const p = providerOf(a);
+  const isLocal = p.kind === 'browser';
   $('#provider').value = a.model.provider;
   $('#providerHint').textContent = p.hint || '';
+  $('#browserFields').hidden = !isLocal;
+  $('#apiFields').hidden = isLocal;
+  $('#localCallout').hidden = isLocal;
+  $('#maxTokensHint').textContent = isLocal
+    ? 'Modelos pequenos: 512 tokens já rendem um bom parágrafo.'
+    : 'Tamanho máximo da resposta.';
+
+  if (isLocal) {
+    const known = BROWSER_MODELS.some(m => m.id === a.model.model);
+    $('#browserModel').value = known ? a.model.model : 'custom';
+    $('#customModelField').hidden = known;
+    $('#browserModelCustom').value = known ? '' : (a.model.model || '');
+    $('#browserDevice').value = a.model.device || 'auto';
+    updateGpuHint();
+    $('#loadProgress').hidden = true;
+    $('#loadProgress').querySelector('i').style.width = '0%';
+    const st = $('#loadStatus');
+    st.style.color = '';
+    if (BROWSER.loadedKey && BROWSER.loadedKey.startsWith(a.model.model + '|')) {
+      st.textContent = 'modelo carregado ✓ — pronto para conversar';
+      st.style.color = 'var(--ok)';
+    } else {
+      st.textContent = 'Ainda não carregado — baixa sozinho na primeira mensagem';
+    }
+  }
   $('#baseUrl').value = a.model.baseUrl;
   $('#model').value = a.model.model;
   $('#apiKey').value = state.keys[a.model.provider] || '';
@@ -515,6 +850,26 @@ function renderExamples() {
   });
 }
 
+let gpuChecked = null;
+async function updateGpuHint() {
+  const el = $('#gpuHint');
+  if (!el) return;
+  if (gpuChecked !== null) { el.textContent = gpuChecked; return; }
+  if (!('gpu' in navigator)) {
+    gpuChecked = 'WebGPU indisponível — vai rodar na CPU.';
+    el.textContent = gpuChecked;
+    return;
+  }
+  el.textContent = 'verificando GPU…';
+  try {
+    const adapter = await navigator.gpu.requestAdapter();
+    gpuChecked = adapter ? 'WebGPU disponível — usa a GPU quando possível.' : 'Sem GPU compatível — vai rodar na CPU.';
+  } catch {
+    gpuChecked = 'WebGPU indisponível — vai rodar na CPU.';
+  }
+  el.textContent = gpuChecked;
+}
+
 function updateTempUI() {
   const input = $('#temperature');
   const v = parseFloat(input.value);
@@ -531,7 +886,11 @@ function updateChatHeader() {
   $('#chatEmoji').textContent = a.emoji || '🧠';
   $('#chatName').textContent = a.name || 'Sem nome';
   const p = providerOf(a);
-  $('#chatModel').textContent = a.model.model ? `${p.label.split(' (')[0]} · ${a.model.model}` : 'modelo não configurado';
+  if (p.kind === 'browser') {
+    $('#chatModel').textContent = 'no navegador · ' + browserModelLabel(a.model.model);
+  } else {
+    $('#chatModel').textContent = a.model.model ? `${p.label.split(' (')[0]} · ${a.model.model}` : 'modelo não configurado';
+  }
   $('#topAgentName').textContent = a.name || 'Sem nome';
 
   const chars = buildMessages(a).reduce((n, m) => n + m.content.length, 0);
@@ -560,12 +919,16 @@ function buildEmptyState() {
   const wrap = document.createElement('div');
   wrap.className = 'empty-state';
   wrap.id = 'emptyState';
+  const local = providerOf(a).kind === 'browser';
   wrap.innerHTML = `
     <div class="empty-emoji">${esc(a.emoji || '🧠')}</div>
     <h3>${esc(a.name || 'Seu agente')} está pronto</h3>
+    ${local ? '<div class="badge-noweb">🔒 roda no seu navegador · sem chave de API</div>' : ''}
     <p>${isConfigured(a)
-      ? 'Suas regras estão valendo. Mande a primeira mensagem.'
-      : 'Falta conectar um modelo para ela responder. Abra <strong>Modelo</strong> nas regras ao lado e cole sua API key — ou use um modelo local.'}</p>
+      ? (local
+        ? `Suas regras estão valendo. A primeira resposta baixa o modelo (${esc(browserModelLabel(a.model.model))}) e depois roda offline.`
+        : 'Suas regras estão valendo. Mande a primeira mensagem.')
+      : 'Falta conectar um modelo para ela responder. Abra <strong>Modelo</strong> nas regras ao lado e escolha um modelo local — sem chave, sem cadastro.'}</p>
     <div class="suggestions"></div>`;
 
   const sug = wrap.querySelector('.suggestions');
@@ -667,13 +1030,21 @@ async function send() {
   const text = input.value.trim();
   if (!text) return;
 
-  if (!a.model.baseUrl.trim() || !a.model.model.trim()) {
-    toast('Configure o endpoint e o modelo', 'err');
-    openCard('model'); setView('builder'); return;
-  }
-  if (providerOf(a).key && !(state.keys[a.model.provider] || '').trim()) {
-    toast('Cole sua API key para conectar', 'err');
-    openCard('model'); setView('builder'); $('#apiKey').focus(); return;
+  const prov = providerOf(a);
+  if (prov.kind === 'browser') {
+    if (!String(a.model.model || '').trim()) {
+      toast('Escolha um modelo local', 'err');
+      openCard('model'); setView('builder'); return;
+    }
+  } else {
+    if (!a.model.baseUrl.trim() || !a.model.model.trim()) {
+      toast('Configure o endpoint e o modelo', 'err');
+      openCard('model'); setView('builder'); return;
+    }
+    if (prov.key && !(state.keys[a.model.provider] || '').trim()) {
+      toast('Cole sua API key para conectar', 'err');
+      openCard('model'); setView('builder'); $('#apiKey').focus(); return;
+    }
   }
 
   input.value = '';
@@ -707,14 +1078,20 @@ async function runCompletion(a) {
 
   let acc = '';
   controller = new AbortController();
+  const isLocal = providerOf(a).kind === 'browser';
 
   try {
     const messages = buildMessages(a);
-    const full = await callModel(a, messages, delta => {
+    const onDelta = delta => {
       acc += delta;
       bubble.innerHTML = md(acc);
       scrollBottom();
-    }, controller.signal);
+    };
+    const onStatus = st => renderLoadStatus(bubble, st);
+
+    const full = isLocal
+      ? await callBrowserModel(a, messages, onDelta, controller.signal, onStatus)
+      : await callModel(a, messages, onDelta, controller.signal);
 
     if (!acc && full) { acc = full; bubble.innerHTML = md(acc); }
     if (!acc.trim()) throw new Error('O modelo respondeu vazio.');
@@ -724,7 +1101,7 @@ async function runCompletion(a) {
     persist();
     renderChat();
   } catch (err) {
-    if (err.name === 'AbortError') {
+    if (err.name === 'AbortError' || controller.signal.aborted) {
       if (acc.trim()) {
         a.messages.push({ role: 'assistant', content: acc });
       } else {
@@ -746,6 +1123,36 @@ async function runCompletion(a) {
   }
 }
 
+function fmtBytes(n) {
+  if (!Number.isFinite(n) || n <= 0) return '';
+  const mb = n / (1024 * 1024);
+  if (mb < 1) return `${Math.round(n / 1024)} KB`;
+  if (mb < 1024) return `${mb < 10 ? mb.toFixed(1) : Math.round(mb)} MB`;
+  return `${(mb / 1024).toFixed(1)} GB`;
+}
+
+function renderLoadStatus(bubble, st) {
+  if (!st) return;
+  const prev = Number(bubble.dataset.pct || 0);
+  const pct = Math.max(prev, Math.max(0, Math.min(100, Math.round(st.progress || 0))));
+  bubble.dataset.pct = String(pct);
+  const downloading = st.phase === 'download' || st.phase === 'total';
+  const size = st.total ? ` · ${fmtBytes(st.loaded || 0)} de ${fmtBytes(st.total)}` : '';
+  const label = st.phase === 'ready'
+    ? 'pensando…'
+    : downloading
+      ? `baixando modelo… ${pct}%${size}`
+      : (st.label || 'preparando modelo local…');
+
+  bubble.innerHTML = `
+    <div class="load-status">
+      <div class="load-line"><span class="spinner"></span><span>${esc(label)}</span></div>
+      ${downloading ? `<div class="progress"><i style="width:${pct}%"></i></div>` : ''}
+      ${downloading ? '<div class="load-note">só na primeira vez — depois fica no cache do navegador</div>' : ''}
+    </div>`;
+  scrollBottom();
+}
+
 function friendlyError(err) {
   const raw = String(err && err.message || err);
   let hint = '';
@@ -757,6 +1164,10 @@ function friendlyError(err) {
     hint = '\n\nDica: verifique o nome do modelo e se o endpoint termina em /v1 (sem /chat/completions).';
   } else if (/429|rate/i.test(raw)) {
     hint = '\n\nDica: limite de uso atingido — espere alguns segundos ou troque de modelo.';
+  } else if (/memory|out of memory|OOM|too large|Array buffer allocation/i.test(raw)) {
+    hint = '\n\nDica: o modelo é grande demais para este dispositivo. Escolha um modelo menor (0.5B) ou use a CPU (WASM).';
+  } else if (/Worker|module/i.test(raw)) {
+    hint = '\n\nDica: o motor local precisa que a página seja servida por http(s) — abrir o arquivo direto (file://) bloqueia Web Workers.';
   }
   return '⚠️ ' + raw + hint;
 }
@@ -1166,19 +1577,131 @@ function bindEvents() {
     const a = currentAgent();
     const p = PROVIDERS[providerSel.value];
     a.model.provider = providerSel.value;
-    a.model.baseUrl = p.baseUrl;
-    a.model.model = p.models[0] || '';
+
+    if (p.kind === 'browser') {
+      a.model.baseUrl = '';
+      a.model.model = BROWSER_DEFAULT_MODEL;
+      a.model.device = a.model.device || 'auto';
+      a.model.maxTokens = a.model.maxTokens > 1024 ? 512 : (a.model.maxTokens || 512);
+      a.model.stream = true;
+    } else {
+      a.model.baseUrl = p.baseUrl;
+      a.model.model = p.models[0] || '';
+      if (a.model.maxTokens <= 512) a.model.maxTokens = 2048;
+    }
+
     $('#baseUrl').value = a.model.baseUrl;
     $('#model').value = a.model.model;
+    $('#maxTokens').value = a.model.maxTokens;
     $('#providerHint').textContent = p.hint || '';
     $('#keyField').style.display = p.key ? '' : 'none';
     $('#apiKey').value = state.keys[a.model.provider] || '';
     $('#modelSuggestions').innerHTML = p.models.map(m => `<option value="${esc(m)}"></option>`).join('');
     $('#testResult').textContent = '';
-  $('#testResult').style.color = '';
+    $('#testResult').style.color = '';
+    $('#browserFields').hidden = p.kind !== 'browser';
+    $('#apiFields').hidden = p.kind === 'browser';
+    $('#localCallout').hidden = p.kind === 'browser';
+    $('#maxTokensHint').textContent = p.kind === 'browser'
+      ? 'Modelos pequenos: 512 tokens já rendem um bom parágrafo.'
+      : 'Tamanho máximo da resposta.';
+    if (p.kind === 'browser') {
+      const known = BROWSER_MODELS.some(m => m.id === a.model.model);
+      $('#browserModel').value = known ? a.model.model : 'custom';
+      $('#customModelField').hidden = known;
+      $('#browserModelCustom').value = known ? '' : a.model.model;
+      $('#browserDevice').value = a.model.device || 'auto';
+      updateGpuHint();
+      const st = $('#loadStatus');
+      st.style.color = '';
+      st.textContent = 'Ainda não carregado — baixa sozinho na primeira mensagem';
+      $('#loadProgress').hidden = true;
+    }
     touch(a);
     updateChatHeader();
     if (!a.messages.length) renderChat();
+  });
+
+  /* ---- modelo no navegador ---- */
+  const bModel = $('#browserModel');
+  bModel.innerHTML = BROWSER_MODELS.map(m => `<option value="${esc(m.id)}">${esc(m.label)}</option>`).join('');
+  bModel.addEventListener('change', () => {
+    const a = currentAgent();
+    const custom = bModel.value === 'custom';
+    $('#customModelField').hidden = !custom;
+    if (custom) {
+      const v = $('#browserModelCustom').value.trim();
+      a.model.model = v || BROWSER_DEFAULT_MODEL;
+      $('#browserModelCustom').focus();
+    } else {
+      a.model.model = bModel.value;
+    }
+    const st = $('#loadStatus');
+    st.style.color = '';
+    st.textContent = 'Ainda não carregado — baixa sozinho na primeira mensagem';
+    touch(a);
+    updateChatHeader();
+    renderAgentList();
+    if (!a.messages.length) renderChat();
+  });
+
+  $('#browserModelCustom').addEventListener('input', e => {
+    const a = currentAgent();
+    a.model.model = e.target.value.trim();
+    touch(a);
+    updateChatHeader();
+  });
+
+  $('#browserDevice').addEventListener('change', e => {
+    const a = currentAgent();
+    a.model.device = e.target.value;
+    const st = $('#loadStatus');
+    st.style.color = '';
+    st.textContent = 'Modo de execução alterado — recarrega na próxima mensagem';
+    touch(a);
+  });
+
+  $('#btnLoadModel').addEventListener('click', async () => {
+    const a = currentAgent();
+    const btn = $('#btnLoadModel');
+    const status = $('#loadStatus');
+    const bar = $('#loadProgress');
+    if (!String(a.model.model || '').trim()) { toast('Escolha um modelo primeiro', 'err'); return; }
+
+    btn.disabled = true;
+    btn.textContent = 'Carregando…';
+    status.style.color = '';
+    status.textContent = 'preparando…';
+    bar.hidden = false;
+    bar.querySelector('i').style.width = '0%';
+
+    try {
+      let lastPct = 0;
+      const res = await ensureBrowserModel(a.model.model, a.model.device || 'auto', info => {
+        const pct = Math.max(lastPct, Math.round(info.progress || 0));
+        lastPct = pct;
+        if (info.phase === 'download' || info.phase === 'total') {
+          const size = info.total ? ` · ${fmtBytes(info.loaded || 0)} de ${fmtBytes(info.total)}` : '';
+          status.textContent = `baixando… ${pct}%${size}`;
+          bar.querySelector('i').style.width = pct + '%';
+        } else {
+          status.textContent = info.label || 'preparando…';
+        }
+      });
+      bar.querySelector('i').style.width = '100%';
+      status.textContent = `modelo carregado ✓ (${res.device || 'auto'}${res.dtype ? ' · ' + res.dtype : ''})`;
+      status.style.color = 'var(--ok)';
+      toast('Modelo pronto — pode conversar', 'ok');
+      if (!a.messages.length) renderChat();
+      setTimeout(() => { bar.hidden = true; }, 900);
+    } catch (e) {
+      status.textContent = '✕ ' + String(e.message || e).slice(0, 140);
+      status.style.color = 'var(--danger)';
+      bar.hidden = true;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Baixar e carregar';
+    }
   });
   $('#baseUrl').addEventListener('input', e => { const a = currentAgent(); a.model.baseUrl = e.target.value; touch(a); });
   $('#model').addEventListener('input', e => {

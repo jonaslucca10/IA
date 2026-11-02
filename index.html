@@ -66,7 +66,7 @@
         <input id="agentEmoji" class="emoji-input" maxlength="4" value="🧠" title="Emoji do agente" aria-label="Emoji do agente" />
         <input id="agentName" class="name-input" value="Meu agente" title="Nome do agente" aria-label="Nome do agente" />
       </div>
-      <p class="hint">Tudo aqui é definido por você. Edite, salve, conecte um modelo e converse.</p>
+      <p class="hint">Tudo aqui é definido por você. Edite as regras, escolha um modelo e converse — sem chave de API.</p>
     </div>
 
     <div class="scroll-area">
@@ -221,28 +221,79 @@
             <span class="hint" id="providerHint"></span>
           </label>
 
-          <div class="grid-2" style="margin-top:14px">
-            <label class="field">
-              <span class="label">Endpoint (base URL)</span>
-              <input type="text" id="baseUrl" spellcheck="false" placeholder="https://api.openai.com/v1" />
+          <!-- ===== MODELO NO NAVEGADOR (sem API) ===== -->
+          <div id="browserFields" hidden>
+            <div class="grid-2" style="margin-top:14px">
+              <label class="field">
+                <span class="label">Modelo</span>
+                <select id="browserModel"></select>
+              </label>
+              <label class="field">
+                <span class="label">Aceleração</span>
+                <select id="browserDevice">
+                  <option value="auto">Automática (GPU se der)</option>
+                  <option value="webgpu">GPU — WebGPU</option>
+                  <option value="wasm">CPU — WASM</option>
+                </select>
+                <span class="hint" id="gpuHint"></span>
+              </label>
+            </div>
+
+            <label class="field" id="customModelField" style="margin-top:12px" hidden>
+              <span class="label">ID do modelo ONNX no Hugging Face</span>
+              <input type="text" id="browserModelCustom" spellcheck="false" placeholder="onnx-community/Qwen2.5-0.5B-Instruct" />
+              <span class="hint">Qualquer modelo com pesos ONNX compatíveis com Transformers.js.</span>
             </label>
-            <label class="field">
-              <span class="label">Modelo</span>
-              <input type="text" id="model" list="modelSuggestions" spellcheck="false" placeholder="gpt-4o-mini" />
-              <datalist id="modelSuggestions"></datalist>
+
+            <div class="model-actions">
+              <button class="btn small primary" id="btnLoadModel">Baixar e carregar</button>
+              <span class="hint" id="loadStatus">Ainda não carregado</span>
+            </div>
+            <div class="progress" id="loadProgress" hidden><i></i></div>
+
+            <div class="callout">
+              <strong>Sem API, sem chave, sem cadastro.</strong> O modelo é baixado uma vez (~400 MB a 1,2 GB) e fica no cache do navegador. Depois disso, roda 100% no seu dispositivo — nem o prompt nem as respostas saem daqui.
+              <br /><br />
+              Modelos pequenos são ótimos para conversa e tarefas simples. Para qualidade alta e grátis, use o Ollama.
+            </div>
+          </div>
+
+          <!-- ===== API (chave) ===== -->
+          <div id="apiFields">
+            <div class="grid-2" style="margin-top:14px">
+              <label class="field">
+                <span class="label">Endpoint (base URL)</span>
+                <input type="text" id="baseUrl" spellcheck="false" placeholder="https://api.openai.com/v1" />
+              </label>
+              <label class="field">
+                <span class="label">Modelo</span>
+                <input type="text" id="model" list="modelSuggestions" spellcheck="false" placeholder="gpt-4o-mini" />
+                <datalist id="modelSuggestions"></datalist>
+              </label>
+            </div>
+
+            <label class="field" style="margin-top:14px" id="keyField">
+              <span class="label">API key <span class="opt">fica só no seu navegador</span></span>
+              <div class="key-row">
+                <input type="password" id="apiKey" spellcheck="false" autocomplete="off" placeholder="sk-..." />
+                <button class="btn small ghost" id="btnToggleKey" type="button" title="Mostrar/ocultar">👁</button>
+              </div>
+              <span class="hint">Salva só neste navegador. Evite usar em computador compartilhado.</span>
+            </label>
+
+            <div class="model-actions">
+              <button class="btn small ghost" id="btnTest">Testar conexão</button>
+              <span class="hint" id="testResult"></span>
+            </div>
+
+            <label class="check-row" style="margin-top:12px">
+              <input type="checkbox" id="stream" checked />
+              <span>Resposta em tempo real (streaming)</span>
             </label>
           </div>
 
-          <label class="field" style="margin-top:14px" id="keyField">
-            <span class="label">API key <span class="opt">fica só no seu navegador</span></span>
-            <div class="key-row">
-              <input type="password" id="apiKey" spellcheck="false" autocomplete="off" placeholder="sk-..." />
-              <button class="btn small ghost" id="btnToggleKey" type="button" title="Mostrar/ocultar">👁</button>
-            </div>
-            <span class="hint">Salva só neste navegador. Evite usar em computador compartilhado.</span>
-          </label>
-
-          <div class="grid-2" style="margin-top:14px">
+          <!-- ===== COMUM ===== -->
+          <div class="grid-2" style="margin-top:16px">
             <label class="field">
               <span class="label">Criatividade <b id="tempVal">0.7</b></span>
               <input type="range" id="temperature" min="0" max="2" step="0.1" value="0.7" />
@@ -251,24 +302,14 @@
             <label class="field">
               <span class="label">Máx. de tokens</span>
               <input type="number" id="maxTokens" min="64" max="32768" step="64" value="2048" />
-              <span class="hint">Tamanho máximo da resposta.</span>
+              <span class="hint" id="maxTokensHint">Tamanho máximo da resposta.</span>
             </label>
           </div>
 
-          <label class="check-row" style="margin-top:6px">
-            <input type="checkbox" id="stream" checked />
-            <span>Resposta em tempo real (streaming)</span>
-          </label>
-
-          <div class="model-actions">
-            <button class="btn small ghost" id="btnTest">Testar conexão</button>
-            <span class="hint" id="testResult"></span>
-          </div>
-
           <div class="callout" id="localCallout">
-            <strong>Controle máximo:</strong> rodando um modelo local (Ollama ou LM Studio), tudo acontece na sua máquina — as regras, o histórico e as respostas não passam por servidor de terceiros.
+            <strong>Controle máximo:</strong> com o modelo no navegador ou no Ollama, tudo acontece no seu dispositivo — as regras, o histórico e as respostas não passam por servidor de terceiros.
             <br /><br />
-            Esta interface não adiciona filtros nem censura própria: o prompt que sai daqui é exatamente o que você montou. O comportamento final depende do modelo conectado.
+            Esta interface não adiciona filtros nem censura própria: o prompt que sai daqui é exatamente o que você montou. O comportamento final depende do modelo escolhido.
           </div>
         </div>
       </section>

@@ -460,6 +460,42 @@ input[type=range]::-moz-range-thumb{
 .composer-foot{display:flex; justify-content:space-between; gap:10px; margin-top:7px; padding:0 4px; font-size:10.5px; color:var(--text-3)}
 kbd{font-family:var(--mono); font-size:9.5px; background:var(--panel-3); border:1px solid var(--line); border-bottom-width:2px; border-radius:4px; padding:1px 4px}
 
+/* ============ MODELO LOCAL / PROGRESSO ============ */
+.badge-noweb{
+  display:inline-flex; align-items:center; gap:6px;
+  margin:0 auto 12px; padding:5px 11px;
+  font-size:11px; font-weight:500; color:#bff0d4;
+  background:rgba(98,217,154,.09);
+  border:1px solid rgba(98,217,154,.28);
+  border-radius:99px;
+}
+.empty-state .badge-noweb{display:flex; width:fit-content}
+
+.progress{
+  height:6px; margin-top:10px;
+  background:#1b1b29; border-radius:99px; overflow:hidden;
+}
+.progress i{
+  display:block; height:100%; width:0%;
+  background:linear-gradient(90deg,var(--accent),var(--accent-2));
+  border-radius:99px;
+  transition:width .25s ease;
+}
+#loadProgress{margin-top:10px}
+
+.load-status{display:flex; flex-direction:column; gap:2px; min-width:180px}
+.load-line{display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--text-2)}
+.load-note{font-size:10.5px; color:var(--text-3); margin-top:5px}
+.load-status .progress{height:5px; margin-top:8px}
+
+.spinner{
+  width:12px; height:12px; flex:0 0 12px; border-radius:50%;
+  border:2px solid rgba(184,169,255,.25);
+  border-top-color:var(--accent-2);
+  animation:spin .8s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
 /* ============ MODALS ============ */
 .modal{
   position:fixed; inset:0; z-index:100;
