@@ -221,6 +221,26 @@
             <span class="hint" id="providerHint"></span>
           </label>
 
+          <!-- ===== MODELO PRÓPRIO (treinado aqui) ===== -->
+          <div id="ownFields" hidden>
+            <div class="own-card">
+              <div class="own-head">
+                <span class="own-badge">🧪 modelo próprio</span>
+                <span class="own-meta" id="ownMeta">treinado do zero neste repositório</span>
+              </div>
+              <p class="own-desc">
+                Um GPT pequeno, escrito e treinado aqui em português. Os pesos vêm com o app
+                (nada de API, nada de CDN de modelo). Qualidade de modelo pequeno: frases curtas,
+                conversa simples e nenhum conhecimento de mundo.
+              </p>
+              <div class="model-actions">
+                <button class="btn small primary" id="btnLoadOwn">Carregar modelo</button>
+                <span class="hint" id="ownStatus">Ainda não carregado</span>
+              </div>
+              <div class="progress" id="ownProgress" hidden><i></i></div>
+            </div>
+          </div>
+
           <!-- ===== MODELO NO NAVEGADOR (sem API) ===== -->
           <div id="browserFields" hidden>
             <div class="grid-2" style="margin-top:14px">

@@ -22,6 +22,10 @@ const uid = () => Math.random().toString(36).slice(2, 9) + Date.now().toString(3
 
 /* ---------------- provedores ---------------- */
 const PROVIDERS = {
+  own: {
+    label: 'Modelo próprio (treinado aqui)', baseUrl: '', models: [], key: false, kind: 'own',
+    hint: 'O GPT que treinamos do zero neste repositório. Sem chave e sem download externo: os pesos vêm com o app.'
+  },
   browser: {
     label: 'No navegador (sem API)', baseUrl: '', models: [], key: false, kind: 'browser',
     hint: 'Baixa o modelo uma vez e roda no seu dispositivo. Sem chave, sem cadastro, sem servidor.'
@@ -486,6 +490,137 @@ async function callBrowserModel(agent, messages, onDelta, signal, onStatus) {
   return text;
 }
 
+/* ---------------- motor do modelo próprio ---------------- */
+const OWN = {
+  worker: null,
+  ready: false,
+  loading: null,
+  pending: new Map(),
+  seq: 0,
+  onProgress: null,
+  meta: null
+};
+
+function ownWorker() {
+  if (OWN.worker) return OWN.worker;
+  const w = new Worker('own-worker.js', { type: 'module' });
+  w.onmessage = e => onOwnMessage(e.data);
+  w.onerror = e => {
+    const err = new Error('Falha ao carregar o modelo próprio: ' + (e.message || 'erro desconhecido'));
+    failOwn(err);
+  };
+  OWN.worker = w;
+  return w;
+}
+
+function failOwn(err) {
+  if (OWN.loading) {
+    const { reject } = OWN.loading;
+    OWN.loading = null;
+    reject(err);
+  }
+  OWN.pending.forEach(p => p.reject(err));
+  OWN.pending.clear();
+  OWN.ready = false;
+}
+
+function onOwnMessage(msg) {
+  if (!msg) return;
+
+  if (msg.type === 'progress') {
+    if (OWN.onProgress) OWN.onProgress(msg);
+    return;
+  }
+  if (msg.type === 'ready') {
+    OWN.ready = true;
+    OWN.meta = msg;
+    const loading = OWN.loading;
+    OWN.loading = null;
+    if (loading) loading.resolve(msg);
+    return;
+  }
+  if (msg.type === 'delta') {
+    const p = OWN.pending.get(msg.reqId);
+    if (p && p.onDelta) p.onDelta(msg.text);
+    return;
+  }
+  if (msg.type === 'done') {
+    const p = OWN.pending.get(msg.reqId);
+    if (p) { OWN.pending.delete(msg.reqId); p.resolve(msg); }
+    return;
+  }
+  if (msg.type === 'error') {
+    const err = new Error(msg.message || 'Erro no modelo próprio');
+    const p = msg.reqId != null ? OWN.pending.get(msg.reqId) : null;
+    if (p) { OWN.pending.delete(msg.reqId); p.reject(err); }
+    else failOwn(err);
+  }
+}
+
+function ensureOwnModel(onProgress) {
+  if (OWN.ready) return Promise.resolve(OWN.meta || {});
+  if (OWN.loading) {
+    if (onProgress) OWN.onProgress = onProgress;
+    return OWN.loading.promise;
+  }
+
+  const worker = ownWorker();
+  OWN.onProgress = onProgress || null;
+
+  const promise = new Promise((resolve, reject) => {
+    OWN.loading = { resolve, reject, promise: null };
+    worker.postMessage({ type: 'load' });
+  });
+  if (OWN.loading) OWN.loading.promise = promise;
+  return promise;
+}
+
+function ownGenerate({ messages, options, onDelta, signal }) {
+  const worker = ownWorker();
+  const reqId = ++OWN.seq;
+
+  return new Promise((resolve, reject) => {
+    OWN.pending.set(reqId, { onDelta, resolve, reject });
+
+    if (signal) {
+      const abort = () => {
+        worker.postMessage({ type: 'interrupt', reqId });
+        setTimeout(() => {
+          const p = OWN.pending.get(reqId);
+          if (p) { OWN.pending.delete(reqId); p.resolve({ text: '', interrupted: true }); }
+        }, 2500);
+      };
+      if (signal.aborted) abort();
+      else signal.addEventListener('abort', abort, { once: true });
+    }
+
+    worker.postMessage({ type: 'generate', reqId, messages, options });
+  });
+}
+
+async function callOwnModel(agent, messages, onDelta, signal, onStatus) {
+  if (!OWN.ready) {
+    onStatus && onStatus({ phase: 'loading', label: 'carregando o modelo próprio…' });
+    await ensureOwnModel(info => onStatus && onStatus(info));
+  }
+  onStatus && onStatus({ phase: 'ready', label: 'pensando…' });
+
+  const result = await ownGenerate({
+    messages,
+    options: {
+      maxNewTokens: agent.model.maxTokens || 120,
+      temperature: agent.model.temperature,
+      topK: 40,
+      topP: 0.95,
+      repetitionPenalty: 1.15
+    },
+    onDelta,
+    signal
+  });
+
+  return String(result?.text || '').trim();
+}
+
 /* ---------------- estado ---------------- */
 let state = { agents: [], currentId: null, keys: {} };
 let saveTimer = null;
@@ -511,12 +646,12 @@ function makeAgent(t = null) {
     extra: base.extra || '',
     examples: (base.examples || []).map(e => ({ id: uid(), user: e.user, assistant: e.assistant })),
     model: {
-      provider: 'browser',
+      provider: 'own',
       baseUrl: '',
-      model: BROWSER_DEFAULT_MODEL,
+      model: 'meu-modelo',
       device: 'auto',
-      temperature: 0.7,
-      maxTokens: 512,
+      temperature: 0.8,
+      maxTokens: 120,
       stream: true
     },
     suggestions: base.suggestions || ['Se apresente em 2 frases', 'O que você consegue fazer?', 'Vamos começar'],
@@ -548,18 +683,20 @@ function load() {
   persist(true);
 }
 
-// agentes sem chave e sem conversa passam a usar o modelo no navegador
+// agentes em branco passam a usar o modelo próprio (ou o do navegador, se preferir)
 function adoptBrowserIfUnusable() {
   state.agents.forEach(a => {
     const p = PROVIDERS[a.model.provider];
-    if (!p || p.kind === 'browser') return;
-    if (p.key && !(state.keys[a.model.provider] || '').trim() && !a.messages.length) {
-      a.model.provider = 'browser';
-      a.model.baseUrl = '';
-      a.model.model = BROWSER_DEFAULT_MODEL;
-      a.model.device = a.model.device || 'auto';
-      a.model.maxTokens = Math.min(a.model.maxTokens || 512, 512);
-    }
+    if (!p || a.messages.length) return;
+
+    const semChave = p.key && !(state.keys[a.model.provider] || '').trim();
+    const noNavegadorPadrao = p.kind === 'browser' && a.model.model === BROWSER_DEFAULT_MODEL;
+    if (!semChave && !noNavegadorPadrao) return;
+
+    a.model.provider = 'own';
+    a.model.baseUrl = '';
+    a.model.model = 'meu-modelo';
+    a.model.maxTokens = Math.min(a.model.maxTokens || 120, 256);
   });
 }
 
@@ -570,12 +707,12 @@ function migrate(a) {
   a.style = Object.assign({ tone: 'direto e objetivo', language: 'português do Brasil', length: 'equilibradas', format: 'texto corrido com markdown quando ajudar' }, a.style || {});
   a.examples = a.examples || [];
   a.model = Object.assign({
-    provider: 'browser',
+    provider: 'own',
     baseUrl: '',
-    model: BROWSER_DEFAULT_MODEL,
+    model: 'meu-modelo',
     device: 'auto',
-    temperature: 0.7,
-    maxTokens: 512,
+    temperature: 0.8,
+    maxTokens: 120,
     stream: true
   }, a.model || {});
   if (!PROVIDERS[a.model.provider]) a.model.provider = 'custom';
@@ -649,6 +786,7 @@ function providerOf(agent) {
 
 function isConfigured(agent) {
   const p = providerOf(agent);
+  if (p.kind === 'own') return true;
   if (p.kind === 'browser') return !!String(agent.model.model || '').trim();
   const hasKey = !p.key || !!(state.keys[agent.model.provider] || '').trim();
   return !!(agent.model.baseUrl || '').trim() && !!(agent.model.model || '').trim() && hasKey;
@@ -662,9 +800,11 @@ function renderAgentList() {
     const el = document.createElement('div');
     el.className = 'agent-item' + (a.id === state.currentId ? ' active' : '');
     const kind = (PROVIDERS[a.model.provider] || {}).kind;
-    const sub = kind === 'browser'
-      ? 'navegador · ' + browserModelLabel(a.model.model)
-      : (a.model.model || 'modelo não definido');
+    const sub = kind === 'own'
+      ? 'modelo próprio · treinado aqui'
+      : kind === 'browser'
+        ? 'navegador · ' + browserModelLabel(a.model.model)
+        : (a.model.model || 'modelo não definido');
     el.innerHTML = `
       <div class="a-emoji">${esc(a.emoji || '🧠')}</div>
       <div class="a-meta">
@@ -700,14 +840,28 @@ function renderBuilder() {
 
   const p = providerOf(a);
   const isLocal = p.kind === 'browser';
+  const isOwn = p.kind === 'own';
   $('#provider').value = a.model.provider;
   $('#providerHint').textContent = p.hint || '';
+  $('#ownFields').hidden = !isOwn;
   $('#browserFields').hidden = !isLocal;
-  $('#apiFields').hidden = isLocal;
-  $('#localCallout').hidden = isLocal;
-  $('#maxTokensHint').textContent = isLocal
-    ? 'Modelos pequenos: 512 tokens já rendem um bom parágrafo.'
-    : 'Tamanho máximo da resposta.';
+  $('#apiFields').hidden = isLocal || isOwn;
+  $('#localCallout').hidden = isLocal || isOwn;
+  $('#maxTokensHint').textContent = isOwn
+    ? 'Modelo pequeno: 120 tokens costumam bastar.'
+    : isLocal
+      ? 'Modelos pequenos: 512 tokens já rendem um bom parágrafo.'
+      : 'Tamanho máximo da resposta.';
+
+  if (isOwn) {
+    updateOwnMeta();
+    const st = $('#ownStatus');
+    st.style.color = OWN.ready ? 'var(--ok)' : '';
+    st.textContent = OWN.ready
+      ? `carregado ✓ ${fmtParams(OWN.info?.params)}`.trim()
+      : 'Ainda não carregado — carrega sozinho na primeira mensagem';
+    $('#ownProgress').hidden = true;
+  }
 
   if (isLocal) {
     const known = BROWSER_MODELS.some(m => m.id === a.model.model);
@@ -886,7 +1040,9 @@ function updateChatHeader() {
   $('#chatEmoji').textContent = a.emoji || '🧠';
   $('#chatName').textContent = a.name || 'Sem nome';
   const p = providerOf(a);
-  if (p.kind === 'browser') {
+  if (p.kind === 'own') {
+    $('#chatModel').textContent = 'modelo próprio' + (OWN.info ? ' · ' + fmtParams(OWN.info.params) : '') + ' · treinado aqui';
+  } else if (p.kind === 'browser') {
     $('#chatModel').textContent = 'no navegador · ' + browserModelLabel(a.model.model);
   } else {
     $('#chatModel').textContent = a.model.model ? `${p.label.split(' (')[0]} · ${a.model.model}` : 'modelo não configurado';
@@ -919,15 +1075,24 @@ function buildEmptyState() {
   const wrap = document.createElement('div');
   wrap.className = 'empty-state';
   wrap.id = 'emptyState';
-  const local = providerOf(a).kind === 'browser';
+  const kind = providerOf(a).kind;
+  const local = kind === 'browser' || kind === 'own';
+  const badge = kind === 'own'
+    ? `<div class="badge-noweb">🧪 modelo próprio · treinado neste repositório${OWN.info ? ' · ' + fmtParams(OWN.info.params) : ''}</div>`
+    : kind === 'browser'
+      ? '<div class="badge-noweb">🔒 roda no seu navegador · sem chave de API</div>'
+      : '';
+
   wrap.innerHTML = `
     <div class="empty-emoji">${esc(a.emoji || '🧠')}</div>
     <h3>${esc(a.name || 'Seu agente')} está pronto</h3>
-    ${local ? '<div class="badge-noweb">🔒 roda no seu navegador · sem chave de API</div>' : ''}
+    ${badge}
     <p>${isConfigured(a)
-      ? (local
-        ? `Suas regras estão valendo. A primeira resposta baixa o modelo (${esc(browserModelLabel(a.model.model))}) e depois roda offline.`
-        : 'Suas regras estão valendo. Mande a primeira mensagem.')
+      ? (kind === 'own'
+        ? 'Nada para configurar: mande a primeira mensagem. O modelo é pequeno, então respostas curtas funcionam melhor.'
+        : kind === 'browser'
+          ? `Suas regras estão valendo. A primeira resposta baixa o modelo (${esc(browserModelLabel(a.model.model))}) e depois roda offline.`
+          : 'Suas regras estão valendo. Mande a primeira mensagem.')
       : 'Falta conectar um modelo para ela responder. Abra <strong>Modelo</strong> nas regras ao lado e escolha um modelo local — sem chave, sem cadastro.'}</p>
     <div class="suggestions"></div>`;
 
@@ -1031,7 +1196,9 @@ async function send() {
   if (!text) return;
 
   const prov = providerOf(a);
-  if (prov.kind === 'browser') {
+  if (prov.kind === 'own') {
+    // modelo próprio: nada para configurar
+  } else if (prov.kind === 'browser') {
     if (!String(a.model.model || '').trim()) {
       toast('Escolha um modelo local', 'err');
       openCard('model'); setView('builder'); return;
@@ -1089,9 +1256,12 @@ async function runCompletion(a) {
     };
     const onStatus = st => renderLoadStatus(bubble, st);
 
-    const full = isLocal
-      ? await callBrowserModel(a, messages, onDelta, controller.signal, onStatus)
-      : await callModel(a, messages, onDelta, controller.signal);
+    const kind = providerOf(a).kind;
+    const full = kind === 'own'
+      ? await callOwnModel(a, messages, onDelta, controller.signal, onStatus)
+      : kind === 'browser'
+        ? await callBrowserModel(a, messages, onDelta, controller.signal, onStatus)
+        : await callModel(a, messages, onDelta, controller.signal);
 
     if (!acc && full) { acc = full; bubble.innerHTML = md(acc); }
     if (!acc.trim()) throw new Error('O modelo respondeu vazio.');
@@ -1121,6 +1291,30 @@ async function runCompletion(a) {
     controller = null;
     setSendingUI(false);
   }
+}
+
+function fmtParams(n) {
+  if (!Number.isFinite(n) || n <= 0) return '';
+  return n >= 1e6 ? (n / 1e6).toFixed(1).replace('.', ',') + 'M parâmetros' : Math.round(n / 1e3) + 'k parâmetros';
+}
+
+function updateOwnMeta() {
+  const el = $('#ownMeta');
+  if (!el) return;
+  if (OWN.info) {
+    el.textContent = `${fmtParams(OWN.info.params)} · janela ${OWN.info.ctx} · vocab ${OWN.info.vocab.toLocaleString('pt-BR')}`;
+  }
+}
+
+async function fetchOwnInfo() {
+  try {
+    const res = await fetch('model/own/config.json');
+    if (!res.ok) return;
+    OWN.info = await res.json();
+    updateOwnMeta();
+    updateChatHeader();
+    if (!currentAgent()?.messages.length) renderChat();
+  } catch { /* segue sem os metadados */ }
 }
 
 function fmtBytes(n) {
@@ -1578,7 +1772,12 @@ function bindEvents() {
     const p = PROVIDERS[providerSel.value];
     a.model.provider = providerSel.value;
 
-    if (p.kind === 'browser') {
+    if (p.kind === 'own') {
+      a.model.baseUrl = '';
+      a.model.model = 'meu-modelo';
+      a.model.maxTokens = Math.min(a.model.maxTokens || 120, 256);
+      a.model.stream = true;
+    } else if (p.kind === 'browser') {
       a.model.baseUrl = '';
       a.model.model = BROWSER_DEFAULT_MODEL;
       a.model.device = a.model.device || 'auto';
@@ -1599,12 +1798,22 @@ function bindEvents() {
     $('#modelSuggestions').innerHTML = p.models.map(m => `<option value="${esc(m)}"></option>`).join('');
     $('#testResult').textContent = '';
     $('#testResult').style.color = '';
+    $('#ownFields').hidden = p.kind !== 'own';
     $('#browserFields').hidden = p.kind !== 'browser';
-    $('#apiFields').hidden = p.kind === 'browser';
-    $('#localCallout').hidden = p.kind === 'browser';
-    $('#maxTokensHint').textContent = p.kind === 'browser'
-      ? 'Modelos pequenos: 512 tokens já rendem um bom parágrafo.'
-      : 'Tamanho máximo da resposta.';
+    $('#apiFields').hidden = p.kind === 'browser' || p.kind === 'own';
+    $('#localCallout').hidden = p.kind === 'browser' || p.kind === 'own';
+    $('#maxTokensHint').textContent = p.kind === 'own'
+      ? 'Modelo pequeno: 120 tokens costumam bastar.'
+      : p.kind === 'browser'
+        ? 'Modelos pequenos: 512 tokens já rendem um bom parágrafo.'
+        : 'Tamanho máximo da resposta.';
+    if (p.kind === 'own') {
+      updateOwnMeta();
+      const st = $('#ownStatus');
+      st.style.color = OWN.ready ? 'var(--ok)' : '';
+      st.textContent = OWN.ready ? 'carregado ✓' : 'Ainda não carregado — carrega sozinho na primeira mensagem';
+      $('#ownProgress').hidden = true;
+    }
     if (p.kind === 'browser') {
       const known = BROWSER_MODELS.some(m => m.id === a.model.model);
       $('#browserModel').value = known ? a.model.model : 'custom';
@@ -1620,6 +1829,40 @@ function bindEvents() {
     touch(a);
     updateChatHeader();
     if (!a.messages.length) renderChat();
+  });
+
+  /* ---- modelo próprio ---- */
+  $('#btnLoadOwn').addEventListener('click', async () => {
+    const btn = $('#btnLoadOwn');
+    const status = $('#ownStatus');
+    const bar = $('#ownProgress');
+    btn.disabled = true;
+    btn.textContent = 'Carregando…';
+    status.style.color = '';
+    status.textContent = 'preparando…';
+    bar.hidden = false;
+    bar.querySelector('i').style.width = '15%';
+
+    try {
+      const meta = await ensureOwnModel(info => {
+        status.textContent = info.label || 'carregando…';
+        if (info.phase === 'load') bar.querySelector('i').style.width = '60%';
+      });
+      bar.querySelector('i').style.width = '100%';
+      status.textContent = `carregado ✓ ${fmtParams(meta.params)} em ${meta.ms}ms`;
+      status.style.color = 'var(--ok)';
+      toast('Modelo próprio pronto', 'ok');
+      updateChatHeader();
+      if (!currentAgent()?.messages.length) renderChat();
+      setTimeout(() => { bar.hidden = true; }, 900);
+    } catch (e) {
+      status.textContent = '✕ ' + String(e.message || e).slice(0, 140);
+      status.style.color = 'var(--danger)';
+      bar.hidden = true;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Carregar modelo';
+    }
   });
 
   /* ---- modelo no navegador ---- */
@@ -1774,6 +2017,7 @@ function bindEvents() {
 load();
 bindEvents();
 renderAll();
+fetchOwnInfo();
 setView('chat');
 if (!store.ok) {
   toast('Este navegador bloqueou o armazenamento local — as mudanças não serão salvas', 'err');
