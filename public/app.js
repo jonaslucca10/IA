@@ -200,6 +200,12 @@
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || `Erro HTTP ${res.status}`);
       thinking.remove();
+      if (typeof data.rules === 'string') {
+        // Ensinar/esquecer: o servidor devolve o texto de regras atualizado.
+        config.rules = data.rules;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+        els.rulesInput.value = config.rules;
+      }
       addMessage('assistant', data.reply);
       history.push({ role: 'assistant', content: data.reply });
       speak(data.reply);
@@ -266,5 +272,9 @@
   setupRecognition();
   fillSettingsForm();
 
-  addMessage('assistant', 'Olá! Toque no microfone ou digite para começar.');
+  addMessage(
+    'assistant',
+    'Olá! Toque no microfone ou digite para começar. Para me ensinar, diga: ' +
+      '"aprenda: quando eu disser oi, responda Olá, tudo bem!". Para apagar: "esqueça oi".'
+  );
 })();

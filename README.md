@@ -25,6 +25,20 @@ npm start        # abre em http://localhost:3000
 npm test         # roda os testes
 ```
 
+## Ensinar o assistente
+
+Você ensina conversando, por voz ou digitando:
+
+```
+aprenda: quando eu disser oi, responda Olá, tudo bem!
+quando eu disser abacaxi responda Que fruta gostosa!
+esqueça oi
+```
+
+- Ensinar um gatilho que já existe substitui a resposta antiga.
+- O que você ensina é gravado no navegador (em `localStorage`), não no servidor.
+  Por isso, outro navegador ou outro computador começa sem essas regras.
+
 ## Formato das regras
 
 Uma regra por linha: gatilhos separados por vírgula, `=>`, respostas separadas por `|`.
