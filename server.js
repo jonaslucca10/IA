@@ -3,9 +3,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const core = require('./lib/core');
-
-const { HttpError, llmConfig, isConfigured, runChat } = core;
+const { HttpError, runChat } = require('./lib/core');
 
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const MAX_BODY_BYTES = 200 * 1024;
@@ -65,22 +63,14 @@ function serveStatic(req, res, pathname) {
   });
 }
 
-/**
- * Cria o servidor HTTP local.
- * options.llm = { baseUrl, apiKey, model } — por padrão lê das variáveis de ambiente.
- */
-function createServer(options = {}) {
-  const config = llmConfig(options.llm);
-
+/** Cria o servidor HTTP local. */
+function createServer() {
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
     try {
-      if (req.method === 'GET' && url.pathname === '/api/status') {
-        return sendJson(res, 200, { configured: isConfigured(config), model: config.model, baseUrl: config.baseUrl });
-      }
       if (req.method === 'POST' && url.pathname === '/api/chat') {
         const body = await readJson(req);
-        return sendJson(res, 200, await runChat(config, body));
+        return sendJson(res, 200, runChat(body));
       }
       if (req.method === 'GET' || req.method === 'HEAD') {
         return serveStatic(req, res, url.pathname);
@@ -98,21 +88,12 @@ function createServer(options = {}) {
   return server;
 }
 
-module.exports = {
-  createServer,
-  buildSystemPrompt: core.buildSystemPrompt,
-  sanitizeRules: core.sanitizeRules,
-  sanitizeMessages: core.sanitizeMessages,
-  sanitizeName: core.sanitizeName,
-};
+module.exports = { createServer };
 
 if (require.main === module) {
   const port = Number(process.env.PORT) || 3000;
   const host = process.env.HOST || '0.0.0.0';
   createServer().listen(port, host, () => {
     console.log(`IA por voz rodando em http://localhost:${port}`);
-    if (!isConfigured(llmConfig())) {
-      console.log('Aviso: LLM_API_KEY não definida. Se o provedor for remoto, o chat responderá com erro.');
-    }
   });
 }

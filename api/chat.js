@@ -1,6 +1,8 @@
 'use strict';
 
-const { HttpError, llmConfig, runChat } = require('../lib/core');
+const { HttpError, runChat } = require('../lib/core');
+
+const MAX_BODY_BYTES = 200 * 1024;
 
 /** Lê e interpreta o corpo JSON, aceitando o body já parseado pela Vercel. */
 async function readBody(req) {
@@ -10,7 +12,7 @@ async function readBody(req) {
   let size = 0;
   for await (const chunk of req) {
     size += chunk.length;
-    if (size > 200 * 1024) throw new HttpError(413, 'Requisição muito grande.');
+    if (size > MAX_BODY_BYTES) throw new HttpError(413, 'Requisição muito grande.');
     chunks.push(chunk);
   }
   return parse(Buffer.concat(chunks).toString('utf8') || '{}');
@@ -34,7 +36,7 @@ module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return send(405, { error: 'Método não permitido.' });
   try {
     const body = await readBody(req);
-    return send(200, await runChat(llmConfig(), body));
+    return send(200, runChat(body));
   } catch (err) {
     if (err instanceof HttpError) return send(err.status, { error: err.message });
     console.error(err);

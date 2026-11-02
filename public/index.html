@@ -40,7 +40,7 @@
     </section>
 
     <aside id="settings" class="settings" hidden>
-      <h2>Regras da IA</h2>
+      <h2>Regras e respostas</h2>
 
       <label>
         Nome do assistente
@@ -48,9 +48,10 @@
       </label>
 
       <label>
-        Regras (uma por linha)
-        <textarea id="rulesInput" rows="12" placeholder="Ex.: Responda sempre em português.&#10;Seja direto e objetivo."></textarea>
+        Regras: gatilhos => respostas (uma por linha)
+        <textarea id="rulesInput" rows="14" placeholder="oi, bom dia => Olá! Tudo bem?|Oi! Como vai?"></textarea>
       </label>
+      <p class="hint">Gatilhos são separados por vírgula. Use | para variar a resposta. Mensagens sem gatilho são respondidas pelo modelo próprio.</p>
 
       <h2>Voz</h2>
 

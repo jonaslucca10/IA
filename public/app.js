@@ -1,13 +1,16 @@
 (() => {
   'use strict';
 
-  const STORAGE_KEY = 'ia-voz-config-v1';
+  const STORAGE_KEY = 'ia-voz-config-v2';
   const DEFAULT_CONFIG = {
     name: 'Assistente',
     rules: [
-      'Responda sempre em português do Brasil.',
-      'Seja direto e natural, como numa conversa falada.',
-      'Use respostas curtas (até 3 frases), a menos que eu peça mais detalhes.',
+      '# Formato: gatilhos separados por vírgula => respostas separadas por |',
+      '# Uma resposta é escolhida ao acaso. {nome} vira o nome do assistente.',
+      'oi, olá, ola, bom dia, boa tarde, boa noite => Olá! Como posso ajudar?|Oi! Tudo bem por aí?',
+      'quem é você, quem voce, o que você é => Eu sou o {nome}, um assistente que conversa por voz.',
+      'tchau, até logo, ate logo => Até mais! Foi um prazer conversar com você.',
+      'obrigado, obrigada, valeu => De nada! Precisa de mais alguma coisa?',
     ].join('\n'),
     speak: true,
     lang: 'pt-BR',
@@ -51,10 +54,6 @@
     } catch {
       return { ...DEFAULT_CONFIG };
     }
-  }
-
-  function rulesList() {
-    return config.rules.split(/\r?\n/).map((r) => r.trim()).filter(Boolean);
   }
 
   function fillSettingsForm() {
@@ -194,7 +193,7 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: config.name,
-          rules: rulesList(),
+          rules: config.rules,
           messages: history,
         }),
       });
@@ -239,14 +238,14 @@
   els.saveBtn.addEventListener('click', () => {
     config = {
       name: els.nameInput.value.trim().slice(0, 40) || 'Assistente',
-      rules: els.rulesInput.value.slice(0, 10000),
+      rules: els.rulesInput.value.slice(0, 20000),
       speak: els.speakToggle.checked,
       lang: els.langSelect.value,
       rate: Number(els.rateInput.value),
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
     applyName();
-    els.saveMsg.textContent = 'Salvo. As novas regras valem a partir da próxima mensagem.';
+    els.saveMsg.textContent = 'Salvo. As novas respostas valem a partir da próxima mensagem.';
     setTimeout(() => (els.saveMsg.textContent = ''), 4000);
   });
 
@@ -266,19 +265,6 @@
   applyName();
   setupRecognition();
   fillSettingsForm();
-
-  fetch('/api/status')
-    .then((r) => r.json())
-    .then((s) => {
-      if (!s.configured) {
-        const msg =
-          'O servidor ainda não tem uma chave de IA, por isso não consigo responder. ' +
-          'Defina a variável LLM_API_KEY no ambiente do servidor, reinicie-o e recarregue esta página.';
-        showError(msg);
-        addMessage('assistant', msg);
-      }
-    })
-    .catch(() => showError('Não foi possível falar com o servidor.'));
 
   addMessage('assistant', 'Olá! Toque no microfone ou digite para começar.');
 })();
