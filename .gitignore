@@ -1,0 +1,10 @@
+# artefatos de treino (reproduzíveis pelos scripts em model/train)
+model/train/raw/
+model/train/checkpoints/
+model/train/*.txt
+model/train/*.bin
+model/train/*.json
+model/train/__pycache__/
+*.npz
+__pycache__/
+.DS_Store
