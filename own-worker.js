@@ -120,6 +120,7 @@ async function generate({ reqId, messages, options }) {
 
   const out = [];
   let text = '';
+  const assistantId = s.tokenizer.specials['<|assistant|>'];
 
   for (let i = 0; i < maxNew; i++) {
     if (interrupted) break;
@@ -134,6 +135,13 @@ async function generate({ reqId, messages, options }) {
 
     const specials = s.tokenizer.specials;
     if (id === specials['<|end|>'] || id === specials['<|user|>'] || id === specials['<|endoftext|>']) break;
+
+    if (id === assistantId) {
+      if (out.length) break;      // marcador repetido no meio: encerra
+      logits = s.model.step(id);   // marcador no começo: pula
+      if (!logits) break;
+      continue;
+    }
 
     out.push(id);
     const full = s.tokenizer.decode(out);

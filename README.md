@@ -14,9 +14,13 @@ sem servidor, sem download externo, sem custo por mensagem.
 Não tem build, não tem dependência, não tem conta:
 
 ```bash
-python3 -m http.server 5173
+python3 serve.py
 # abra http://localhost:5173
 ```
+
+`serve.py` é um servidor de desenvolvimento sem dependências: garante o MIME correto para os
+módulos `.mjs` (o motor do modelo), desliga o cache e escuta em `0.0.0.0` para funcionar também
+em preview remoto.
 
 O modelo próprio (7,7 MB de pesos) já vem com o app e carrega em menos de um segundo.
 
@@ -128,6 +132,7 @@ Não exponha esse proxy na internet.
 ## Estrutura
 
 ```
+serve.py        servidor de desenvolvimento (sem dependências)
 index.html      interface
 styles.css      tema escuro, responsivo
 app.js          estado, prompt, chat, streaming, motores

@@ -426,11 +426,15 @@ export function sampleTopK(logits, { temperature = 0.8, topK = 40, topP = 0.95, 
 /* ------------------------------------------------------------------ */
 
 export function createGenerator(model, tokenizer, cfg) {
+  // tokens que encerram a resposta
   const stopIds = new Set([
     tokenizer.specials['<|end|>'],
     tokenizer.specials['<|user|>'],
     tokenizer.specials['<|endoftext|>']
   ].filter(v => typeof v === 'number'));
+
+  // o modelo às vezes repete o marcador de fala: ignora no começo, encerra depois
+  const assistantId = tokenizer.specials['<|assistant|>'];
 
   /**
    * Gera tokens a partir de um prompt já tokenizado.
@@ -458,6 +462,14 @@ export function createGenerator(model, tokenizer, cfg) {
     for (let i = 0; i < maxNew; i++) {
       const id = sampleTopK(logits, { temperature, topK, topP, recent });
       if (stopIds.has(id)) break;
+
+      if (id === assistantId) {
+        if (out.length) break;            // marcador no meio: encerra
+        logits = model.step(id);          // marcador no começo: pula
+        if (!logits) break;
+        continue;
+      }
+
       out.push(id);
       recent.push(id);
       logits = model.step(id);
