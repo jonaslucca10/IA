@@ -10,9 +10,10 @@ Requer Node.js 18 ou mais recente; não há dependências npm nem chave de API.
 node server.js
 ```
 
-Abra `http://localhost:4173`. Para executar os testes:
+Abra `http://localhost:4173`. Para gerar a versão estática de publicação em `dist/` ou executar os testes:
 
 ```bash
+npm run build
 node --test
 ```
 
