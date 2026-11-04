@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="background" x1="8" y1="8" x2="120" y2="120" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#374980" />
+      <stop offset="1" stop-color="#211b48" />
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientTransform="matrix(66 0 0 66 34 24)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8bd8ff" stop-opacity=".6" />
+      <stop offset="1" stop-color="#8bd8ff" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+  <rect width="128" height="128" rx="36" fill="#090d17" />
+  <rect x="8" y="8" width="112" height="112" rx="31" fill="url(#background)" stroke="#9eabff" stroke-opacity=".54" stroke-width="2" />
+  <rect x="8" y="8" width="112" height="112" rx="31" fill="url(#glow)" />
+  <circle cx="91" cy="29" r="4" fill="#c5e8ff" />
+  <circle cx="91" cy="29" r="8" fill="#99d6ff" fill-opacity=".2" />
+  <text x="62" y="91" fill="#f0f3ff" font-family="system-ui, sans-serif" font-size="76" font-weight="800" letter-spacing="-8" text-anchor="middle">J</text>
+  <path d="m95 81 2.6 6.4 6.4 2.6-6.4 2.6L95 99l-2.6-7.4-6.4-2.6 6.4-2.6L95 81Z" fill="#b8a5ff" />
+</svg>

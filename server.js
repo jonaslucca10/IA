@@ -6,11 +6,21 @@ const path = require('node:path');
 
 const ROOT = __dirname;
 const PORT = Number.parseInt(process.env.PORT || '4173', 10);
-const PUBLIC_FILES = new Set(['index.html', 'styles.css', 'local-engine.js', 'app.js']);
+const PUBLIC_FILES = new Set([
+  'index.html',
+  'styles.css',
+  'local-engine.js',
+  'app.js',
+  'manifest.webmanifest',
+  'service-worker.js',
+  'icon.svg',
+]);
 const CONTENT_TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
+  '.svg': 'image/svg+xml; charset=utf-8',
 };
 
 function sendError(response, statusCode, message) {
@@ -18,6 +28,7 @@ function sendError(response, statusCode, message) {
     'Content-Type': 'text/plain; charset=utf-8',
     'Cache-Control': 'no-store',
     'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
   });
   response.end(message);
 }
@@ -55,7 +66,10 @@ async function serveStatic(request, response) {
       'Content-Length': stats.size,
       'Cache-Control': 'no-cache',
       'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'DENY',
       'Referrer-Policy': 'same-origin',
+      'Permissions-Policy': 'microphone=(self), camera=(), geolocation=()',
+      ...(fileName === 'service-worker.js' ? { 'Service-Worker-Allowed': '/' } : {}),
     });
     if (request.method === 'HEAD') response.end();
     else fs.createReadStream(filePath).pipe(response);
@@ -70,5 +84,5 @@ const server = http.createServer((request, response) => {
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Jonis.IA local disponível em http://0.0.0.0:${PORT}`);
-  console.log('Motor local: memória conversacional e busca por similaridade; nenhuma API de IA é chamada.');
+  console.log('Motor local ativo: nenhuma API externa é chamada.');
 });

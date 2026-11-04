@@ -1917,7 +1917,8 @@
     };
   }
 
-  const engine = Object.freeze({ normalize, tokenize, parseTeaching, getLocalReply, knowledgeCount: commonKnowledge.length });
+  const questionVariantCount = new Set(commonKnowledge.flatMap((entry) => entry.questions.map(normalize))).size;
+  const engine = Object.freeze({ normalize, tokenize, parseTeaching, getLocalReply, knowledgeCount: commonKnowledge.length, questionVariantCount });
   if (typeof module !== 'undefined' && module.exports) module.exports = engine;
   else globalThis.JonisIAEngine = engine;
 })();

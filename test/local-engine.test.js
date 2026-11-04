@@ -58,6 +58,11 @@ test('supports asking what it learned and clearing all memories', () => {
   assert.equal(engine.getLocalReply('Esqueça tudo.', memories, fixedDate).action, 'forget-all');
 });
 
+test('reports the verified size of its local knowledge base', () => {
+  assert.equal(engine.knowledgeCount, 1323);
+  assert.equal(engine.questionVariantCount, 3961);
+});
+
 test('answers common questions from its expanded local knowledge base', () => {
   assert.ok(engine.knowledgeCount >= 1300);
 

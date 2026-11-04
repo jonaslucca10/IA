@@ -2,218 +2,210 @@
 <html lang="pt-BR">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#080b14" />
-    <meta name="description" content="Jonis.IA: assistente local que conversa, aprende com você e mantém suas memórias no navegador." />
-    <title>Jonis.IA — inteligência que evolui com você</title>
-    <link rel="stylesheet" href="styles.css?v=cosmic-13" />
-    <script src="local-engine.js?v=cosmic-13" defer></script>
-    <script src="app.js?v=cosmic-13" defer></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#090d17" />
+    <meta name="description" content="Jonis.IA é uma assistente local que conversa, aprende com você e guarda suas memórias neste dispositivo — sem API externa." />
+    <meta name="color-scheme" content="dark" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Jonis.IA" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="icon.svg" type="image/svg+xml" />
+    <title>Jonis.IA — sua conversa, no seu espaço</title>
+    <link rel="stylesheet" href="styles.css?v=cosmic-14" />
+    <script src="local-engine.js?v=cosmic-14" defer></script>
+    <script src="app.js?v=cosmic-14" defer></script>
   </head>
   <body>
-    <div class="space-backdrop" aria-hidden="true"></div>
-    <div class="window-shell">
-      <div class="window-chrome" aria-hidden="true">
-        <span class="window-dots"><i></i><i></i><i></i></span>
-        <span class="chrome-title">Jonis.IA <span>·</span> espaço local</span>
-        <time id="localClock">--:--</time>
-      </div>
+    <a class="skip-link" href="#messageInput">Pular para a conversa</a>
+    <div class="ambient ambient-one" aria-hidden="true"></div>
+    <div class="ambient ambient-two" aria-hidden="true"></div>
 
-      <div class="application">
-        <aside class="sidebar" aria-label="Navegação Jonis.IA">
-          <div class="sidebar-top">
-            <a class="brand" href="#top" aria-label="Jonis.IA, início">
-              <span class="brand-mark" aria-hidden="true"><span>J</span></span>
-              <span class="brand-copy">
-                <strong>Jonis<span>.IA</span></strong>
-                <small>Inteligência que evolui<br />com você</small>
-              </span>
-            </a>
-            <button class="new-chat" id="newChatButton" type="button">
-              <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3.5v13M3.5 10h13" /></svg>
+    <div class="app-shell" id="top">
+      <button class="sidebar-scrim" id="sidebarScrim" type="button" aria-label="Fechar navegação"></button>
+
+      <aside class="sidebar" id="sidebar" aria-label="Navegação Jonis.IA">
+        <div class="sidebar-brand-row">
+          <a class="brand" href="#top" aria-label="Jonis.IA, início">
+            <span class="brand-mark" aria-hidden="true"><span>J</span><i></i></span>
+            <span class="brand-copy">
+              <strong>Jonis<span>.IA</span></strong>
+              <small>Uma IA local, feita para conversar</small>
+            </span>
+          </a>
+          <button class="icon-button sidebar-close" id="closeSidebarButton" type="button" aria-label="Fechar navegação" title="Fechar navegação">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+          </button>
+        </div>
+
+        <button class="new-chat-button" id="newChatButton" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+          <span>Nova conversa</span>
+          <kbd>Ctrl K</kbd>
+        </button>
+
+        <nav class="workspace-nav" aria-label="Seu espaço">
+          <button class="nav-button" id="openMemoriesButton" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5a4 4 0 0 0-7.3 2.2 4 4 0 0 0-.8 7.5 4 4 0 0 0 4 6.7A4 4 0 0 0 12 22V3.5Z" /><path d="M12 3.5a4 4 0 0 1 7.3 2.2 4 4 0 0 1 .8 7.5 4 4 0 0 1-4 6.7A4 4 0 0 1 12 22M8 8.5c1.7 0 2.5.8 2.5 2m5.5-2c-1.7 0-2.5.8-2.5 2M8 15c1.7 0 2.5-.8 2.5-2m5.5 2c-1.7 0-2.5-.8-2.5-2" /></svg>
+            <span>Minhas memórias</span>
+            <span class="nav-count" id="sidebarMemoryCount">0</span>
+          </button>
+          <a class="nav-button" href="#suggestions" id="exploreLink">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5c2.7-1 5.3-.6 8 1.1v13c-2.7-1.7-5.3-2.1-8-1.1v-13Zm16 0c-2.7-1-5.3-.6-8 1.1v13c2.7-1.7 5.3-2.1 8-1.1v-13Z" /><path d="M7 9h2.5m-2.5 3h2.5m5-3H17m-3 3h3" /></svg>
+            <span>Explorar assuntos</span>
+            <span class="nav-count" id="knowledgeCount">1.323</span>
+          </a>
+        </nav>
+
+        <section class="history-section" aria-labelledby="historyTitle">
+          <div class="section-heading">
+            <h2 id="historyTitle">Conversas</h2>
+            <span class="history-count" id="conversationCount">0</span>
+          </div>
+          <div class="conversation-list" id="conversationList" role="list" aria-label="Conversas salvas neste navegador"></div>
+        </section>
+
+        <div class="sidebar-bottom">
+          <div class="privacy-card">
+            <span class="privacy-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12 3 19 6v5c0 4.6-2.7 7.8-7 10-4.3-2.2-7-5.4-7-10V6l7-3Z" /><path d="m9 12 2 2 4-4" /></svg>
+            </span>
+            <span><strong>Seu espaço é privado</strong><small>Conversas e memórias ficam neste navegador.</small></span>
+          </div>
+          <div class="sidebar-profile">
+            <span class="profile-avatar" aria-hidden="true">J</span>
+            <span class="profile-copy"><strong>Jonis.IA</strong><small>Sem conta. Sem API externa.</small></span>
+            <span class="profile-status" aria-label="Pronta para conversar" title="Pronta para conversar"></span>
+          </div>
+        </div>
+      </aside>
+
+      <main class="workspace" id="main-content">
+        <header class="topbar">
+          <div class="topbar-start">
+            <button class="icon-button mobile-menu" id="mobileMenuButton" type="button" aria-label="Abrir navegação" aria-expanded="false" aria-controls="sidebar" title="Abrir navegação">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+            </button>
+            <div class="conversation-heading">
+              <strong id="currentSessionTitle">Nova conversa</strong>
+              <span><i aria-hidden="true"></i><span id="assistantStatus">Pronta para conversar</span></span>
+            </div>
+          </div>
+          <div class="topbar-actions">
+            <span class="local-badge"><i aria-hidden="true"></i> RODA NO SEU DISPOSITIVO</span>
+            <button class="icon-button install-button" id="installButton" type="button" hidden aria-label="Instalar Jonis.IA" title="Instalar Jonis.IA">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 17v3h14v-3" /></svg>
+            </button>
+            <button class="topbar-new-chat" id="newChatTopButton" type="button" title="Começar uma nova conversa">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
               <span>Nova conversa</span>
             </button>
+            <button class="icon-button topbar-memory" id="openMemoriesTopButton" type="button" aria-label="Abrir minhas memórias" title="Minhas memórias">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5a4 4 0 0 0-7.3 2.2 4 4 0 0 0-.8 7.5 4 4 0 0 0 4 6.7A4 4 0 0 0 12 22V3.5Z" /><path d="M12 3.5a4 4 0 0 1 7.3 2.2 4 4 0 0 1 .8 7.5 4 4 0 0 1-4 6.7A4 4 0 0 1 12 22" /></svg>
+            </button>
+            <button class="icon-button stop-button" id="stopSpeech" type="button" hidden aria-label="Parar áudio" title="Parar áudio">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2" /></svg>
+            </button>
           </div>
+        </header>
 
-          <nav class="sidebar-nav">
-            <div class="sidebar-section">
-              <p class="sidebar-label">Recente</p>
-              <a class="nav-item nav-item-current" href="#chatPanel">
-                <span class="nav-icon chat-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 5.5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-7l-5 3v-3H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2Z" /><path d="M7.5 10h9m-9 3h6" /></svg></span>
-                <span class="nav-copy"><strong>Conversa atual</strong><small>Esta sessão</small></span>
-                <span class="nav-active-dot" aria-hidden="true"></span>
-              </a>
-            </div>
-
-            <div class="sidebar-section">
-              <p class="sidebar-label">Seu espaço</p>
-              <a class="nav-item" href="#memoryPanel">
-                <span class="nav-icon memory-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3.5a4 4 0 0 0-7.3 2.2 4 4 0 0 0-.8 7.5 4 4 0 0 0 4 6.7A4 4 0 0 0 12 22V3.5Z" /><path d="M12 3.5a4 4 0 0 1 7.3 2.2 4 4 0 0 1 .8 7.5 4 4 0 0 1-4 6.7A4 4 0 0 1 12 22M8 8.5c1.7 0 2.5.8 2.5 2m5.5-2c-1.7 0-2.5.8-2.5 2M8 15c1.7 0 2.5-.8 2.5-2m5.5 2c-1.7 0-2.5-.8-2.5-2" /></svg></span>
-                <span class="nav-copy"><strong>Memória</strong><small>Aprende com você</small></span>
-              </a>
-              <a class="nav-item" href="#knowledgePanel">
-                <span class="nav-icon knowledge-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5.5c2.7-1 5.3-.6 8 1.1v13c-2.7-1.7-5.3-2.1-8-1.1v-13Zm16 0c-2.7-1-5.3-.6-8 1.1v13c2.7-1.7 5.3-2.1 8-1.1v-13Z" /><path d="M7 9h2.5m-2.5 3h2.5m5-3H17m-3 3h3" /></svg></span>
-                <span class="nav-copy"><strong>Conhecimento</strong><small>Temas locais</small></span>
-              </a>
-            </div>
-          </nav>
-
-          <div class="sidebar-bottom">
-            <div class="privacy-card">
-              <span class="privacy-star" aria-hidden="true">✦</span>
-              <strong>Seu espaço, do seu jeito.</strong>
-              <span>O que você ensina fica neste navegador.</span>
-              <span class="privacy-arrow" aria-hidden="true">↗</span>
-            </div>
-            <div class="sidebar-profile">
-              <span class="profile-avatar" aria-hidden="true">J</span>
-              <span class="profile-copy"><strong>Jonis.IA</strong><small>Assistente local</small></span>
-              <span class="profile-status" title="Pronta para conversar"></span>
-            </div>
-          </div>
-        </aside>
-
-        <main class="main-area" id="top">
-          <header class="main-header">
-            <div class="assistant-presence">
-              <span class="presence-orb" aria-hidden="true"></span>
-              <span class="presence-copy"><strong>Jonis.IA</strong><small id="assistantStatus">Local e pronta para ajudar</small></span>
-            </div>
-            <div class="header-actions">
-              <span class="local-label"><i aria-hidden="true"></i> LOCAL</span>
-              <button class="icon-button" id="clearChatButton" type="button" aria-label="Nova conversa" title="Nova conversa">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
-              </button>
-              <button class="icon-button stop-button" id="stopSpeech" type="button" hidden aria-label="Parar áudio" title="Parar áudio">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2" /></svg>
-              </button>
-            </div>
-          </header>
-
-          <div class="main-scroll">
-            <div class="dashboard-grid">
-              <div class="center-column">
-                <section class="welcome-hero" aria-labelledby="page-title">
-                  <div class="hero-orb" aria-hidden="true"><span></span><i></i></div>
-                  <div class="hero-copy">
-                    <p class="hero-eyebrow"><span></span> UM ESPAÇO PARA DESCOBRIR</p>
-                    <h1 id="page-title">Olá! <span class="wave-emoji" aria-hidden="true">👋</span></h1>
-                    <h2>Como posso te ajudar <span>hoje?</span></h2>
-                    <p>Posso conversar sobre muitos temas, fazer contas e aprender com o que você me conta.</p>
-                  </div>
-                </section>
-
-                <section class="starter-card" aria-label="Como começar">
-                  <div class="starter-spark" aria-hidden="true">✦</div>
-                  <div><strong>Que tal começarmos com algo simples?</strong><p>Explore uma ideia, tire uma dúvida ou compartilhe algo para eu guardar.</p></div>
-                  <span class="starter-time">sempre por aqui</span>
-                </section>
-
-                <section class="suggestions" aria-label="Sugestões para conversar">
-                  <button class="suggestion-card" type="button" data-prompt="O que é inteligência artificial?">
-                    <span class="suggestion-icon suggestion-brain" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 4a3.5 3.5 0 0 0-6.4 1.9 3.5 3.5 0 0 0-.7 6.6 3.5 3.5 0 0 0 3.5 5.9A3.5 3.5 0 0 0 12 20V4Zm0 0a3.5 3.5 0 0 1 6.4 1.9 3.5 3.5 0 0 1 .7 6.6 3.5 3.5 0 0 1-3.5 5.9A3.5 3.5 0 0 1 12 20M8.5 8c1.4 0 2 .6 2 1.7m5-1.7c-1.4 0-2 .6-2 1.7M8.5 14c1.4 0 2-.6 2-1.7m5 1.7c-1.4 0-2-.6-2-1.7" /></svg></span>
-                    <span class="suggestion-copy"><strong>Conhecer a IA</strong><small>Uma ideia para começar</small></span>
-                  </button>
-                  <button class="suggestion-card" type="button" data-prompt="Quanto é (18 + 7) × 3?">
-                    <span class="suggestion-icon suggestion-pencil" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m4 16.5-.8 4.3 4.3-.8L19.8 7.7a2.3 2.3 0 0 0-3.3-3.3L4 16.5Z" /><path d="m14.8 6.1 3.2 3.2" /></svg></span>
-                    <span class="suggestion-copy"><strong>Fazer uma conta</strong><small>Uma conta com etapas</small></span>
-                  </button>
-                  <button class="suggestion-card" type="button" data-prompt="O que é um buraco negro?">
-                    <span class="suggestion-icon suggestion-chart" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 19V9m7 10V5m7 14v-7" /><path d="M3 19.5h18" /></svg></span>
-                    <span class="suggestion-copy"><strong>Explorar ciência</strong><small>Descobrir algo do espaço</small></span>
-                  </button>
-                  <button class="suggestion-card" type="button" data-prompt="O que é fotossíntese?">
-                    <span class="suggestion-icon suggestion-spark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3.5 14 9l5.5 2-5.5 2-2 5.5-2-5.5-5.5-2L10 9l2-5.5Z" /><path d="m19 15 .9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15Z" /></svg></span>
-                    <span class="suggestion-copy"><strong>Ir mais fundo</strong><small>Aprender sobre a natureza</small></span>
-                  </button>
-                </section>
-
-                <section class="chat-panel" id="chatPanel" aria-label="Conversa com Jonis.IA">
-                  <div class="chat-panel-head">
-                    <div class="chat-heading">
-                      <span class="chat-avatar" aria-hidden="true"><span></span></span>
-                      <span><strong>Conversa</strong><small>Aprendizado salvo neste navegador</small></span>
-                    </div>
-                    <span class="chat-local-badge"><i aria-hidden="true"></i> PRIVADO</span>
-                  </div>
-
-                  <div class="message-list" id="messageList" aria-live="polite" aria-relevant="additions">
-                    <article class="message message-assistant">
-                      <div class="avatar avatar-message" aria-hidden="true"><span class="avatar-wave"><i></i><i></i><i></i><i></i><i></i></span></div>
-                      <div class="message-content">
-                        <div class="message-byline"><strong>Jonis.IA</strong><time>agora</time></div>
-                        <div class="message-bubble">Oi! Minha base local cobre vários assuntos. Você também pode me ensinar um fato ou preferência na conversa; vou guardar neste navegador.</div>
-                      </div>
-                    </article>
-                  </div>
-
-                  <div class="notice" id="notice" role="status" aria-live="polite" hidden>
-                    <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7" /><path d="M10 8.5v4M10 6.2h.01" /></svg>
-                    <span id="noticeText"></span>
-                    <button id="dismissNotice" type="button" aria-label="Fechar aviso">×</button>
-                  </div>
-
-                  <form class="composer" id="chatForm">
-                    <button class="mic-button" id="micButton" type="button" aria-label="Ditar mensagem" title="Ditar mensagem">
-                      <svg class="mic-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3" /><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3m-4 0h8" /></svg>
-                      <svg class="mic-stop-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2" /></svg>
-                    </button>
-                    <label class="visually-hidden" for="messageInput">Sua mensagem</label>
-                    <input id="messageInput" name="message" type="text" maxlength="500" placeholder="Digite sua mensagem para Jonis.IA..." autocomplete="off" />
-                    <span class="enter-hint">Enter <span>para enviar</span></span>
-                    <button class="send-button" id="sendButton" type="submit" aria-label="Enviar mensagem" title="Enviar mensagem">
-                      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13m-5-5 5 5-5 5" /></svg>
-                    </button>
-                  </form>
-                  <div class="composer-footer">
-                    <span class="mic-hint"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v12M4.5 5.5v5m7-5v5M1.5 7v2m13-2v2" /></svg> Fale ou digite sua mensagem</span>
-                    <span class="character-count" id="characterCount">0 / 500</span>
-                  </div>
-                </section>
-                <p class="disclaimer">Jonis.IA pode cometer erros. Revise informações importantes.</p>
+        <section class="conversation-viewport" id="conversationViewport" aria-label="Área da conversa">
+          <div class="conversation-content">
+            <section class="welcome-panel" id="welcomePanel" aria-labelledby="welcomeTitle">
+              <div class="welcome-orbit" aria-hidden="true">
+                <span class="orbit-core">J</span><i class="orbit-dot orbit-dot-one"></i><i class="orbit-dot orbit-dot-two"></i>
               </div>
+              <p class="eyebrow"><span></span> BEM-VINDA AO SEU ESPAÇO LOCAL</p>
+              <h1 id="welcomeTitle">Oi, eu sou <span>Jonis.IA</span></h1>
+              <p class="welcome-copy">Vamos conversar? Posso explorar assuntos, fazer contas e aprender com o que você me contar — tudo fica neste dispositivo.</p>
+              <div class="welcome-note"><span aria-hidden="true">✦</span><span><strong>Sem serviço de IA externo.</strong> Minha base é local e tem limites; quando eu não souber, vou ser transparente.</span></div>
+            </section>
 
-              <aside class="insights-column" aria-label="Resumo local">
-                <section class="insight-card focus-card">
-                  <div class="insight-title"><span class="focus-icon" aria-hidden="true">✦</span> Foco do dia</div>
-                  <p>Pequenos passos.</p>
-                  <strong>Grandes descobertas.</strong>
-                  <div class="horizon-art" aria-hidden="true"><span></span><i></i><b></b></div>
-                </section>
+            <section class="suggestions-section" id="suggestions" aria-labelledby="suggestionsTitle">
+              <div class="suggestions-heading">
+                <div><p class="eyebrow">PARA COMEÇAR</p><h2 id="suggestionsTitle">O que vamos descobrir?</h2></div>
+                <span class="suggestion-caption">Escolha uma ideia ou escreva a sua</span>
+              </div>
+              <div class="suggestion-grid">
+                <button class="suggestion-card" type="button" data-prompt="O que é inteligência artificial, em palavras simples?">
+                  <span class="suggestion-icon icon-violet" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 4a3.5 3.5 0 0 0-6.4 1.9 3.5 3.5 0 0 0-.7 6.6 3.5 3.5 0 0 0 3.5 5.9A3.5 3.5 0 0 0 12 20V4Zm0 0a3.5 3.5 0 0 1 6.4 1.9 3.5 3.5 0 0 1 .7 6.6 3.5 3.5 0 0 1-3.5 5.9A3.5 3.5 0 0 1 12 20" /><path d="M8.5 8c1.4 0 2 .6 2 1.7m5-1.7c-1.4 0-2 .6-2 1.7M8.5 14c1.4 0 2-.6 2-1.7m5 1.7c-1.4 0-2-.6-2-1.7" /></svg></span>
+                  <span><strong>Entender uma ideia</strong><small>Me explica o que é inteligência artificial</small></span>
+                  <svg class="suggestion-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5" /></svg>
+                </button>
+                <button class="suggestion-card" type="button" data-prompt="Quanto é (18 + 7) × 3?">
+                  <span class="suggestion-icon icon-blue" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 5h14v14H5z" /><path d="M8 9h2m4 0h2M8 13h2m4 0h2m-8 4h8" /></svg></span>
+                  <span><strong>Resolver uma conta</strong><small>Com parênteses, porcentagens e mais</small></span>
+                  <svg class="suggestion-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5" /></svg>
+                </button>
+                <button class="suggestion-card" type="button" data-prompt="O que é um buraco negro?">
+                  <span class="suggestion-icon icon-cyan" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" /><circle cx="12" cy="12" r="3" /><path d="M3.5 12h5m7 0h5M12 3.5v5m0 7v5" /></svg></span>
+                  <span><strong>Explorar o universo</strong><small>Descobrir algo sobre o espaço</small></span>
+                  <svg class="suggestion-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5" /></svg>
+                </button>
+                <button class="suggestion-card" type="button" data-prompt="Eu gosto de aprender com exemplos.">
+                  <span class="suggestion-icon icon-green" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3.5 14.3 9l5.7 2.3-5.7 2.3-2.3 5.7-2.3-5.7L4 11.3 9.7 9 12 3.5Z" /><path d="m19 15 .8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15Z" /></svg></span>
+                  <span><strong>Me ensinar algo</strong><small>Compartilhar uma preferência comigo</small></span>
+                  <svg class="suggestion-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5" /></svg>
+                </button>
+              </div>
+            </section>
 
-                <section class="insight-card knowledge-card" id="knowledgePanel">
-                  <div class="insight-title"><span class="insight-icon book-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5.5c2.7-1 5.3-.6 8 1.1v13c-2.7-1.7-5.3-2.1-8-1.1v-13Zm16 0c-2.7-1-5.3-.6-8 1.1v13c2.7-1.7 5.3-2.1 8-1.1v-13Z" /></svg></span> Base local</div>
-                  <div class="knowledge-total"><strong id="knowledgeCount">1323</strong><span>temas para explorar</span></div>
-                  <p>Ciência, tecnologia, matemática, natureza, geografia e muito mais.</p>
-                  <div class="topic-pills"><span>Ciência</span><span>Tech</span><span>Mundo</span><span>Ideias</span></div>
-                </section>
-
-                <section class="insight-card memory-card" id="memoryPanel">
-                  <div class="insight-title"><span class="insight-icon memory-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3.5a4 4 0 0 0-7.3 2.2 4 4 0 0 0-.8 7.5 4 4 0 0 0 4 6.7A4 4 0 0 0 12 22V3.5Z" /><path d="M12 3.5a4 4 0 0 1 7.3 2.2 4 4 0 0 1 .8 7.5 4 4 0 0 1-4 6.7A4 4 0 0 1 12 22" /></svg></span> Memória</div>
-                  <strong class="memory-count" id="memoryCount">0 lembranças</strong>
-                  <p id="memorySummary">Aprendendo com você: ensine um fato ou preferência na conversa.</p>
-                  <div class="memory-storage"><span></span> Salvo neste navegador</div>
-                </section>
-              </aside>
-            </div>
+            <div class="message-list" id="messageList" role="log" aria-live="polite" aria-relevant="additions text" aria-label="Mensagens da conversa"></div>
           </div>
+        </section>
 
-          <footer class="main-footer">
-            <span><i aria-hidden="true"></i> Jonis.IA funciona localmente, sem API externa.</span>
-            <span>Memória no seu dispositivo</span>
-          </footer>
-        </main>
-      </div>
+        <section class="chat-dock" aria-label="Escrever uma mensagem">
+          <div class="notice" id="notice" role="status" aria-live="polite" hidden>
+            <span class="notice-symbol" aria-hidden="true">i</span>
+            <span id="noticeText"></span>
+            <button id="dismissNotice" type="button" aria-label="Fechar aviso">×</button>
+          </div>
+          <form class="composer-form" id="chatForm">
+            <div class="composer">
+              <button class="mic-button" id="micButton" type="button" aria-label="Ditar mensagem" title="Ditar mensagem">
+                <svg class="mic-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3" /><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3m-4 0h8" /></svg>
+                <svg class="mic-stop-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2" /></svg>
+              </button>
+              <label class="visually-hidden" for="messageInput">Escreva sua mensagem para Jonis.IA</label>
+              <textarea id="messageInput" name="message" rows="1" maxlength="2000" placeholder="Escreva ou dite sua mensagem…" autocomplete="off"></textarea>
+              <button class="send-button" id="sendButton" type="submit" aria-label="Enviar mensagem" title="Enviar mensagem">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13m-5-5 5 5-5 5" /></svg>
+              </button>
+            </div>
+            <div class="composer-meta">
+              <span class="keyboard-hint"><kbd>Enter</kbd> envia <span class="hint-divider">·</span> <kbd>Shift + Enter</kbd> pula linha</span>
+              <span class="local-compose-hint"><i aria-hidden="true"></i> Sua mensagem é processada localmente</span>
+              <span class="character-count" id="characterCount">0 / 2.000</span>
+            </div>
+          </form>
+          <p class="disclaimer">Posso errar — confira informações importantes. O ditado pode depender do navegador.</p>
+        </section>
+      </main>
     </div>
 
-    <script>
-      (() => {
-        const clock = document.getElementById('localClock');
-        if (!clock) return;
-        const updateClock = () => { clock.textContent = new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(new Date()); };
-        updateClock();
-        window.setInterval(updateClock, 30000);
-      })();
-    </script>
+    <dialog class="memory-dialog" id="memoryDialog" aria-labelledby="memoryDialogTitle" aria-describedby="memoryDialogDescription">
+      <div class="dialog-shell">
+        <header class="dialog-header">
+          <div class="dialog-heading-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3.5a4 4 0 0 0-7.3 2.2 4 4 0 0 0-.8 7.5 4 4 0 0 0 4 6.7A4 4 0 0 0 12 22V3.5Z" /><path d="M12 3.5a4 4 0 0 1 7.3 2.2 4 4 0 0 1 .8 7.5 4 4 0 0 1-4 6.7A4 4 0 0 1 12 22" /></svg></div>
+          <div><p class="eyebrow">SÓ NESTE NAVEGADOR</p><h2 id="memoryDialogTitle">Minhas memórias</h2></div>
+          <button class="icon-button dialog-close" id="closeMemoryDialog" type="button" aria-label="Fechar memórias" title="Fechar">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+          </button>
+        </header>
+        <p class="dialog-description" id="memoryDialogDescription">O que você ensina fica guardado neste dispositivo. Você pode revisar, baixar uma cópia ou apagar quando quiser.</p>
+        <div class="memory-list-wrap">
+          <div class="memory-list-heading"><strong>O que aprendi com você</strong><span id="memoryCount">0</span></div>
+          <ul class="memory-list" id="memoryList"></ul>
+        </div>
+        <footer class="dialog-footer">
+          <button class="secondary-button" id="exportMemoriesButton" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 17v3h14v-3" /></svg>
+            Baixar cópia
+          </button>
+          <button class="danger-button" id="clearMemoriesButton" type="button">Apagar todas</button>
+        </footer>
+      </div>
+    </dialog>
+
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
   </body>
 </html>

@@ -1,0 +1,21 @@
+{
+  "id": "./",
+  "name": "Jonis.IA — sua conversa, no seu espaço",
+  "short_name": "Jonis.IA",
+  "description": "Assistente local que conversa, aprende e guarda suas memórias neste dispositivo.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#080b13",
+  "theme_color": "#090d17",
+  "lang": "pt-BR",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
